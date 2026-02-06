@@ -1,0 +1,2692 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mexa OS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        :root {
+            --accent: #0078d4;
+            --taskbar-bg: rgba(243, 243, 243, 0.85);
+            --window-bg: rgba(255, 255, 255, 0.98);
+            --mica-blur: blur(32px) saturate(180%);
+            --transition: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #000;
+            touch-action: none;
+        }
+
+        /* Boot Animation */
+        #boot-screen {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 100000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease, visibility 0.8s;
+        }
+
+        #boot-screen.fade-out {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .boot-logo {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #00a4ef, #0078d4);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            color: white;
+            margin-bottom: 40px;
+            animation: bootPulse 2s ease infinite;
+            box-shadow: 0 0 60px rgba(0, 120, 212, 0.5);
+        }
+
+        @keyframes bootPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+
+        .boot-text {
+            color: white;
+            font-size: 24px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        .boot-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            margin-top: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Shutdown Screen */
+        #shutdown-screen {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 100000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #shutdown-screen.active {
+            display: flex;
+            animation: shutdownFade 0.5s ease;
+        }
+
+        @keyframes shutdownFade {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .shutdown-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .shutdown-text {
+            color: white;
+            margin-top: 30px;
+            font-size: 18px;
+            font-weight: 300;
+        }
+
+        #desktop {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            background: #000;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        #desktop.active {
+            opacity: 1;
+        }
+
+        .wallpaper {
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(ellipse at 20% 30%, rgba(120, 119, 198, 0.4) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, rgba(255, 119, 198, 0.3) 0%, transparent 40%),
+                radial-gradient(ellipse at 50% 50%, rgba(120, 219, 255, 0.2) 0%, transparent 60%),
+                linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            background-size: cover;
+            transition: all 0.5s ease;
+        }
+
+        .wallpaper.animated {
+            animation: gradientShift 20s ease infinite;
+            background-size: 400% 400%;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Desktop Grid */
+        .desktop-grid {
+            position: absolute;
+            inset: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, 90px);
+            grid-template-rows: repeat(auto-fill, 100px);
+            gap: 12px;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .desktop-icon {
+            width: 90px;
+            height: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 6px;
+            cursor: pointer;
+            border-radius: 8px;
+            padding: 8px;
+            transition: all 0.2s var(--transition);
+            position: relative;
+        }
+
+        .desktop-icon:active {
+            transform: scale(0.95);
+        }
+
+        .desktop-icon.selected {
+            background: rgba(255, 255, 255, 0.15);
+            outline: 2px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .icon-container {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1));
+            backdrop-filter: blur(10px);
+            box-shadow: 
+                0 4px 20px rgba(0,0,0,0.3),
+                inset 0 1px 0 rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.2s;
+        }
+
+        .desktop-icon:hover .icon-container {
+            transform: translateY(-2px);
+        }
+
+        .icon-text {
+            color: white;
+            font-size: 12px;
+            text-align: center;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+            font-weight: 500;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            line-height: 1.3;
+            padding: 0 2px;
+        }
+
+        /* Taskbar */
+        #taskbar {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            height: 48px;
+            background: var(--taskbar-bg);
+            backdrop-filter: var(--mica-blur);
+            -webkit-backdrop-filter: var(--mica-blur);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 
+                0 4px 30px rgba(0,0,0,0.2),
+                inset 0 1px 0 rgba(255,255,255,0.5);
+            border: 1px solid rgba(255,255,255,0.3);
+            z-index: 1000;
+            transition: all 0.3s var(--transition);
+            max-width: 95vw;
+        }
+
+        .taskbar-item {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            font-size: 20px;
+        }
+
+        .taskbar-item:hover {
+            background: rgba(255,255,255,0.6);
+        }
+
+        .taskbar-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            width: 16px;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 2px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .taskbar-item.start-btn {
+            background: linear-gradient(135deg, #00a4ef, #0078d4);
+            color: white;
+            font-weight: bold;
+        }
+
+        .taskbar-center {
+            display: flex;
+            gap: 2px;
+            flex: 1;
+            justify-content: center;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .taskbar-center::-webkit-scrollbar {
+            display: none;
+        }
+
+        .taskbar-right {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding-left: 8px;
+            border-left: 1px solid rgba(0,0,0,0.1);
+            margin-left: 4px;
+        }
+
+        .system-tray {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+        }
+
+        .clock {
+            text-align: center;
+            line-height: 1.2;
+            padding: 0 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .clock:hover {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .clock-time {
+            font-weight: 600;
+            font-size: 12px;
+            color: #333;
+        }
+
+        .clock-date {
+            font-size: 10px;
+            color: #666;
+        }
+
+        /* Start Menu */
+        #start-menu {
+            position: fixed;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px) scale(0.95);
+            width: min(600px, 95vw);
+            max-height: 70vh;
+            background: rgba(243, 243, 243, 0.98);
+            backdrop-filter: var(--mica-blur);
+            border-radius: 16px;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.4);
+            padding: 20px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.25s var(--transition);
+            z-index: 999;
+            overflow-y: auto;
+        }
+
+        #start-menu.open {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0) scale(1);
+        }
+
+        .start-header {
+            position: sticky;
+            top: 0;
+            background: rgba(243, 243, 243, 0.98);
+            padding-bottom: 16px;
+            z-index: 10;
+        }
+
+        .search-box {
+            background: white;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 4px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #666;
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .start-section-title {
+            font-size: 13px;
+            color: #666;
+            font-weight: 600;
+            margin: 16px 0 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .start-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            gap: 8px;
+        }
+
+        .start-app {
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            padding: 8px;
+        }
+
+        .start-app:hover {
+            background: rgba(0,0,0,0.05);
+            transform: translateY(-2px);
+        }
+
+        .start-app-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .start-app-name {
+            font-size: 11px;
+            color: #333;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .start-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 16px;
+            margin-top: 16px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+            position: sticky;
+            bottom: 0;
+            background: rgba(243, 243, 243, 0.98);
+        }
+
+        /* Windows */
+        .window {
+            position: absolute;
+            background: var(--window-bg);
+            border-radius: 8px;
+            box-shadow: 
+                0 25px 80px rgba(0,0,0,0.4),
+                0 0 0 1px rgba(0,0,0,0.1),
+                inset 0 1px 0 rgba(255,255,255,0.5);
+            overflow: hidden;
+            min-width: 280px;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(20px);
+            transition: transform 0.1s, opacity 0.2s;
+            will-change: transform, left, top, width, height;
+        }
+
+        .window.animating {
+            animation: windowOpen 0.3s var(--transition);
+        }
+
+        @keyframes windowOpen {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .window.maximized {
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: calc(100vh - 70px) !important;
+            border-radius: 0;
+            transition: all 0.3s var(--transition);
+        }
+
+        .window.minimized {
+            opacity: 0;
+            transform: scale(0.8) translateY(100px);
+            pointer-events: none;
+        }
+
+        .window.snap-left {
+            left: 0 !important;
+            top: 0 !important;
+            width: 50% !important;
+            height: calc(100vh - 70px) !important;
+            transition: all 0.3s var(--transition);
+        }
+
+        .window.snap-right {
+            left: 50% !important;
+            top: 0 !important;
+            width: 50% !important;
+            height: calc(100vh - 70px) !important;
+            transition: all 0.3s var(--transition);
+        }
+
+        .window-header {
+            height: 40px;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            cursor: grab;
+            touch-action: none;
+        }
+
+        .window-header:active {
+            cursor: grabbing;
+        }
+
+        .window-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #333;
+            font-weight: 600;
+            overflow: hidden;
+        }
+
+        .window-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 2px;
+        }
+
+        .window-btn {
+            width: 34px;
+            height: 30px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 300;
+        }
+
+        .window-btn:hover {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .window-btn.close:hover {
+            background: #e81123;
+            color: white;
+        }
+
+        .window-content {
+            flex: 1;
+            overflow: auto;
+            background: white;
+            position: relative;
+        }
+
+        /* Resize handles */
+        .resize-handle {
+            position: absolute;
+            z-index: 10;
+        }
+
+        .resize-n { top: 0; left: 10px; right: 10px; height: 5px; cursor: n-resize; }
+        .resize-s { bottom: 0; left: 10px; right: 10px; height: 5px; cursor: s-resize; }
+        .resize-e { right: 0; top: 10px; bottom: 10px; width: 5px; cursor: e-resize; }
+        .resize-w { left: 0; top: 10px; bottom: 10px; width: 5px; cursor: w-resize; }
+        .resize-ne { top: 0; right: 0; width: 10px; height: 10px; cursor: ne-resize; }
+        .resize-nw { top: 0; left: 0; width: 10px; height: 10px; cursor: nw-resize; }
+        .resize-se { bottom: 0; right: 0; width: 10px; height: 10px; cursor: se-resize; }
+        .resize-sw { bottom: 0; left: 0; width: 10px; height: 10px; cursor: sw-resize; }
+
+        @media (pointer: coarse) {
+            .resize-handle {
+                display: none;
+            }
+        }
+
+        /* Snap Zones */
+        .snap-zones {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 998;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .snap-zones.active {
+            opacity: 1;
+        }
+
+        .snap-zone {
+            position: absolute;
+            background: rgba(0,120,212,0.1);
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .snap-zone.left { left: 10px; top: 10px; width: calc(50% - 15px); height: calc(100% - 90px); }
+        .snap-zone.right { right: 10px; top: 10px; width: calc(50% - 15px); height: calc(100% - 90px); }
+        .snap-zone.top { left: 10px; top: 10px; width: calc(100% - 20px); height: calc(100% - 90px); }
+
+        /* Context Menu */
+        .context-menu {
+            position: fixed;
+            background: rgba(255,255,255,0.98);
+            backdrop-filter: blur(20px);
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            border: 1px solid rgba(0,0,0,0.1);
+            padding: 8px 0;
+            min-width: 200px;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transform: scale(0.95);
+            transition: all 0.15s;
+        }
+
+        .context-menu.show {
+            opacity: 1;
+            visibility: visible;
+            transform: scale(1);
+        }
+
+        .context-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: #333;
+            transition: all 0.1s;
+        }
+
+        .context-item:hover {
+            background: rgba(0,120,212,0.1);
+        }
+
+        .context-item.danger {
+            color: #d32f2f;
+        }
+
+        .context-separator {
+            height: 1px;
+            background: rgba(0,0,0,0.1);
+            margin: 8px 0;
+        }
+
+        /* Notification Center */
+        #notification-center {
+            position: fixed;
+            right: -100%;
+            top: 0;
+            width: min(400px, 100%);
+            height: 100%;
+            background: rgba(243, 243, 243, 0.98);
+            backdrop-filter: var(--mica-blur);
+            transition: right 0.3s var(--transition);
+            z-index: 1001;
+            box-shadow: -5px 0 30px rgba(0,0,0,0.2);
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        #notification-center.open {
+            right: 0;
+        }
+
+        .panel-header {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .notification-item {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            border-left: 4px solid var(--accent);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+
+        .notification-item:hover {
+            transform: translateX(-4px);
+        }
+
+        .notification-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .notification-text {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .notification-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 8px;
+        }
+
+        /* Widgets Panel */
+        #widgets-panel {
+            position: fixed;
+            left: -100%;
+            top: 0;
+            width: min(400px, 100%);
+            height: 100%;
+            background: rgba(243, 243, 243, 0.98);
+            backdrop-filter: var(--mica-blur);
+            transition: left 0.3s var(--transition);
+            z-index: 1001;
+            box-shadow: 5px 0 30px rgba(0,0,0,0.2);
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        #widgets-panel.open {
+            left: 0;
+        }
+
+        .widget {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            transition: transform 0.2s;
+        }
+
+        .widget:hover {
+            transform: translateY(-2px);
+        }
+
+        .widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .widget-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .weather-main {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .weather-temp {
+            font-size: 56px;
+            font-weight: 300;
+            color: #333;
+            line-height: 1;
+        }
+
+        .weather-info {
+            flex: 1;
+        }
+
+        .weather-city {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .weather-desc {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .weather-details {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .weather-detail {
+            text-align: center;
+        }
+
+        .weather-detail-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .weather-detail-label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        /* App Styles */
+        .explorer-toolbar {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-btn {
+            padding: 8px 12px;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+
+        .toolbar-btn:hover {
+            background: #f0f0f0;
+            border-color: #ddd;
+        }
+
+        .address-bar {
+            flex: 1;
+            min-width: 200px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 16px;
+            padding: 20px;
+        }
+
+        .file-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .file-item:hover {
+            background: rgba(0,120,212,0.08);
+        }
+
+        .file-item.selected {
+            background: rgba(0,120,212,0.15);
+            outline: 2px solid var(--accent);
+        }
+
+        .file-icon-large {
+            width: 64px;
+            height: 64px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            background: linear-gradient(135deg, #ffd700, #ffa500);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .file-name {
+            font-size: 12px;
+            color: #333;
+            font-weight: 500;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-date {
+            font-size: 11px;
+            color: #999;
+        }
+
+        /* Terminal */
+        .terminal-container {
+            background: #1e1e1e;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Cascadia Code', 'Consolas', monospace;
+        }
+
+        .terminal-tabs {
+            display: flex;
+            background: #2d2d2d;
+            padding: 4px;
+            gap: 4px;
+            overflow-x: auto;
+        }
+
+        .terminal-tab {
+            padding: 8px 16px;
+            background: #1e1e1e;
+            color: #ccc;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .terminal-tab.active {
+            background: #1e1e1e;
+            color: white;
+        }
+
+        .terminal-content {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+            color: #cccccc;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .terminal-line {
+            margin-bottom: 4px;
+            word-wrap: break-word;
+        }
+
+        .terminal-prompt {
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        .terminal-input-line {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .terminal-input {
+            background: transparent;
+            border: none;
+            color: #cccccc;
+            font-family: inherit;
+            font-size: inherit;
+            outline: none;
+            flex: 1;
+            caret-color: #cccccc;
+        }
+
+        /* Browser */
+        .browser-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: white;
+        }
+
+        .browser-toolbar {
+            background: #f8f9fa;
+            padding: 8px 12px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .browser-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .browser-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .browser-btn:hover {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .browser-address {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            padding: 6px 16px;
+            gap: 8px;
+        }
+
+        .browser-address input {
+            border: none;
+            background: transparent;
+            flex: 1;
+            outline: none;
+            font-size: 13px;
+        }
+
+        .browser-content {
+            flex: 1;
+            overflow: auto;
+            background: white;
+        }
+
+        .browser-home {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .browser-logo {
+            font-size: 64px;
+            margin-bottom: 24px;
+        }
+
+        .browser-search {
+            width: 100%;
+            max-width: 600px;
+            position: relative;
+        }
+
+        .browser-search input {
+            width: 100%;
+            padding: 16px 24px;
+            border-radius: 30px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+            outline: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            transition: box-shadow 0.2s;
+        }
+
+        .browser-search input:focus {
+            box-shadow: 0 4px 30px rgba(0,0,0,0.15);
+        }
+
+        /* Calculator */
+        .calculator {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2px;
+            background: #f0f0f0;
+            height: 100%;
+            padding: 2px;
+        }
+
+        .calc-display {
+            grid-column: 1 / -1;
+            background: white;
+            padding: 20px;
+            text-align: right;
+            font-size: 32px;
+            font-weight: 300;
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-end;
+            min-height: 100px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .calc-btn {
+            background: white;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+        }
+
+        .calc-btn:active {
+            background: #e0e0e0;
+            transform: scale(0.95);
+        }
+
+        .calc-btn.operator {
+            background: #f8f9fa;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .calc-btn.equals {
+            background: var(--accent);
+            color: white;
+            grid-column: span 2;
+        }
+
+        .calc-btn.zero {
+            grid-column: span 2;
+        }
+
+        /* Settings */
+        .settings-container {
+            display: flex;
+            height: 100%;
+            background: white;
+        }
+
+        .settings-sidebar {
+            width: 280px;
+            background: #f8f9fa;
+            border-right: 1px solid #e0e0e0;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .settings-search {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px 14px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+            font-size: 13px;
+        }
+
+        .settings-category {
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+        }
+
+        .settings-category:hover {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .settings-category.active {
+            background: rgba(0,120,212,0.1);
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .settings-content {
+            flex: 1;
+            padding: 32px;
+            overflow-y: auto;
+        }
+
+        .settings-header {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            color: #333;
+        }
+
+        .setting-item {
+            padding: 20px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .setting-label {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .setting-desc {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+
+        .toggle {
+            width: 44px;
+            height: 24px;
+            background: #ccc;
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle.active {
+            background: var(--accent);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .toggle.active::after {
+            transform: translateX(20px);
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+            .desktop-grid {
+                grid-template-columns: repeat(auto-fill, 80px);
+                gap: 8px;
+            }
+
+            .desktop-icon {
+                width: 80px;
+                height: 90px;
+            }
+
+            .icon-container {
+                width: 48px;
+                height: 48px;
+                font-size: 24px;
+            }
+
+            #taskbar {
+                height: 56px;
+                margin-bottom: 8px;
+                padding: 6px;
+            }
+
+            .taskbar-item {
+                width: 44px;
+                height: 44px;
+            }
+
+            .window {
+                border-radius: 0;
+            }
+
+            .window:not(.maximized) {
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                height: calc(100% - 72px) !important;
+            }
+
+            .settings-sidebar {
+                display: none;
+            }
+
+            .file-grid {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                gap: 12px;
+                padding: 12px;
+            }
+
+            .explorer-toolbar {
+                padding: 8px;
+            }
+
+            .toolbar-btn span {
+                display: none;
+            }
+        }
+
+        /* Touch feedback */
+        @media (hover: none) {
+            .taskbar-item:active {
+                transform: scale(0.9);
+            }
+
+            .start-app:active {
+                transform: scale(0.95);
+            }
+
+            .file-item:active {
+                background: rgba(0,120,212,0.15);
+            }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0,0,0,0.3);
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(30, 30, 30, 0.95);
+            color: white;
+            padding: 16px 20px;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 300px;
+            animation: slideIn 0.3s var(--transition);
+            pointer-events: all;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast-icon {
+            font-size: 20px;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .toast-message {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        /* Quick Settings */
+        .quick-settings {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .quick-toggle {
+            aspect-ratio: 1;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .quick-toggle:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .quick-toggle.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .quick-toggle-icon {
+            font-size: 24px;
+        }
+
+        .quick-toggle-label {
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        /* Power Menu */
+        .power-menu {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+            z-index: 100002;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .power-menu.active {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .power-options {
+            display: flex;
+            gap: 20px;
+        }
+
+        .power-option {
+            width: 120px;
+            height: 120px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+            border: 2px solid transparent;
+        }
+
+        .power-option:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.05);
+            border-color: var(--accent);
+        }
+
+        .power-option-icon {
+            font-size: 40px;
+        }
+
+        .power-option-text {
+            font-size: 14px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <!-- Boot Screen -->
+    <div id="boot-screen">
+        <div class="boot-logo">🪟</div>
+        <div class="boot-text">Mexa OS</div>
+        <div class="boot-spinner"></div>
+    </div>
+
+    <!-- Shutdown Screen -->
+    <div id="shutdown-screen">
+        <div class="shutdown-spinner"></div>
+        <div class="shutdown-text">Bilgisayarınız kapatılıyor...</div>
+    </div>
+
+    <!-- Power Menu -->
+    <div class="power-menu" id="power-menu" onclick="if(event.target===this)window.closePowerMenu()">
+        <div class="power-options">
+            <div class="power-option" onclick="window.sleepSystem()">
+                <div class="power-option-icon">💤</div>
+                <div class="power-option-text">Uyku</div>
+            </div>
+            <div class="power-option" onclick="window.shutdownSystem()">
+                <div class="power-option-icon">⏻</div>
+                <div class="power-option-text">Kapat</div>
+            </div>
+            <div class="power-option" onclick="window.restartSystem()">
+                <div class="power-option-icon">🔄</div>
+                <div class="power-option-text">Yeniden Başlat</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="desktop">
+        <div class="wallpaper animated"></div>
+        
+        <!-- Desktop Icons -->
+        <div class="desktop-grid" id="desktop-icons">
+            <div class="desktop-icon" data-app="explorer">
+                <div class="icon-container">📁</div>
+                <div class="icon-text">Dosya Gezgini</div>
+            </div>
+            <div class="desktop-icon" data-app="edge">
+                <div class="icon-container">🌐</div>
+                <div class="icon-text">Mexa Browser</div>
+            </div>
+            <div class="desktop-icon" data-app="terminal">
+                <div class="icon-container">⌨️</div>
+                <div class="icon-text">Terminal</div>
+            </div>
+            <div class="desktop-icon" data-app="calculator">
+                <div class="icon-container">🧮</div>
+                <div class="icon-text">Hesap Makinesi</div>
+            </div>
+            <div class="desktop-icon" data-app="settings">
+                <div class="icon-container">⚙️</div>
+                <div class="icon-text">Ayarlar</div>
+            </div>
+            <div class="desktop-icon" data-app="store">
+                <div class="icon-container">🛍️</div>
+                <div class="icon-text">Uygulama Mağazası</div>
+            </div>
+            <div class="desktop-icon" data-app="photos">
+                <div class="icon-container">🖼️</div>
+                <div class="icon-text">Galeri</div>
+            </div>
+            <div class="desktop-icon" data-app="notepad">
+                <div class="icon-container">📝</div>
+                <div class="icon-text">Not Defteri</div>
+            </div>
+        </div>
+
+        <!-- Windows Container -->
+        <div id="windows-container"></div>
+
+        <!-- Snap Zones -->
+        <div class="snap-zones" id="snap-zones">
+            <div class="snap-zone left"></div>
+            <div class="snap-zone right"></div>
+            <div class="snap-zone top"></div>
+        </div>
+    </div>
+
+    <!-- Taskbar -->
+    <div id="taskbar">
+        <div class="taskbar-item start-btn" onclick="window.toggleStart()" title="Başlat">⊞</div>
+        <div class="taskbar-center" id="taskbar-apps"></div>
+        <div class="taskbar-right">
+            <div class="system-tray">
+                <span onclick="window.toggleWidgets()" style="cursor: pointer;">🌤️</span>
+                <span>🔊</span>
+                <span>📶</span>
+                <span>🔋</span>
+            </div>
+            <div class="clock" onclick="window.toggleNotifications()">
+                <div class="clock-time" id="clock-time">12:00</div>
+                <div class="clock-date" id="clock-date">01.01.2024</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Menu -->
+    <div id="start-menu">
+        <div class="start-header">
+            <div class="search-box">
+                <span>🔍</span>
+                <span>Ara uygulama, dosya veya ayar</span>
+            </div>
+        </div>
+        
+        <div class="start-section-title">
+            <span>Sabitlendi</span>
+            <span style="color: var(--accent); cursor: pointer; font-size: 12px;">Tümü</span>
+        </div>
+        <div class="start-content" id="pinned-apps"></div>
+
+        <div class="start-section-title">Önerilenler</div>
+        <div class="start-content" id="recommended-apps"></div>
+
+        <div class="start-footer">
+            <div class="user-profile">
+                <div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">U</div>
+                <div>
+                    <div style="font-weight: 600; font-size: 13px;">user</div>
+                    <div style="font-size: 11px; color: #666;">Yerel Hesap</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <div class="taskbar-item" style="width: 36px; height: 36px;" onclick="window.lockSystem()" title="Kilitle">🔒</div>
+                <div class="taskbar-item" style="width: 36px; height: 36px;" onclick="window.openPowerMenu()" title="Güç">⚡</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Center -->
+    <div id="notification-center">
+        <div class="panel-header">
+            <span>Bildirimler</span>
+            <span style="font-size: 14px; color: #666; cursor: pointer;" onclick="window.clearNotifications()">Temizle</span>
+        </div>
+        
+        <div class="quick-settings">
+            <div class="quick-toggle active" onclick="this.classList.toggle('active')">
+                <div class="quick-toggle-icon">✈️</div>
+                <div class="quick-toggle-label">Uçak Modu</div>
+            </div>
+            <div class="quick-toggle" onclick="this.classList.toggle('active')">
+                <div class="quick-toggle-icon">📶</div>
+                <div class="quick-toggle-label">Wi-Fi</div>
+            </div>
+            <div class="quick-toggle active" onclick="this.classList.toggle('active')">
+                <div class="quick-toggle-icon">🔵</div>
+                <div class="quick-toggle-label">Bluetooth</div>
+            </div>
+            <div class="quick-toggle" onclick="this.classList.toggle('active')">
+                <div class="quick-toggle-icon">🔋</div>
+                <div class="quick-toggle-label">Tasarruf</div>
+            </div>
+            <div class="quick-toggle active" onclick="this.classList.toggle('active')">
+                <div class="quick-toggle-icon">🌙</div>
+                <div class="quick-toggle-label">Rahatsız Etme</div>
+            </div>
+            <div class="quick-toggle" onclick="this.classList.toggle('active')">
+                <div class="quick-toggle-icon">🖥️</div>
+                <div class="quick-toggle-label">Yansıt</div>
+            </div>
+        </div>
+
+        <div id="notifications-list">
+            <div class="notification-item" onclick="window.openApp('settings')">
+                <div class="notification-title">Mexa OS</div>
+                <div class="notification-text">Hoş geldiniz! Sistem hazır.</div>
+                <div class="notification-time">Şimdi</div>
+            </div>
+            <div class="notification-item">
+                <div class="notification-title">Sistem Güncellemesi</div>
+                <div class="notification-text">Yeni özellikler ve iyileştirmeler yüklendi.</div>
+                <div class="notification-time">5 dk önce</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Widgets Panel -->
+    <div id="widgets-panel">
+        <div class="panel-header">Widget'lar</div>
+        
+        <div class="widget">
+            <div class="widget-header">
+                <span class="widget-title">Hava Durumu</span>
+                <span style="font-size: 12px; color: #666;">İstanbul</span>
+            </div>
+            <div class="weather-main">
+                <div class="weather-temp">24°</div>
+                <div class="weather-info">
+                    <div class="weather-city">Güneşli</div>
+                    <div class="weather-desc">Hissedilen 26°</div>
+                </div>
+            </div>
+            <div class="weather-details">
+                <div class="weather-detail">
+                    <div class="weather-detail-value">%45</div>
+                    <div class="weather-detail-label">Nem</div>
+                </div>
+                <div class="weather-detail">
+                    <div class="weather-detail-value">12 km/s</div>
+                    <div class="weather-detail-label">Rüzgar</div>
+                </div>
+                <div class="weather-detail">
+                    <div class="weather-detail-value">10/10</div>
+                    <div class="weather-detail-label">UV</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="widget">
+            <div class="widget-header">
+                <span class="widget-title">Takvim</span>
+                <span style="font-size: 12px; color: #666;" id="widget-full-date">7 Şubat 2026</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="font-size: 48px; font-weight: 300; color: var(--accent);" id="widget-day">7</div>
+                <div>
+                    <div style="font-size: 18px; font-weight: 600; color: #333;">Cuma</div>
+                    <div style="color: #666; font-size: 14px;">Şubat 2026</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="context-menu">
+        <div class="context-item" onclick="window.refreshDesktop()">
+            <span>🔄</span> Yenile
+        </div>
+        <div class="context-separator"></div>
+        <div class="context-item" onclick="window.createNewFolder()">
+            <span>📁</span> Yeni Klasör
+        </div>
+        <div class="context-item" onclick="window.createNewFile()">
+            <span>📄</span> Yeni Metin Belgesi
+        </div>
+        <div class="context-separator"></div>
+        <div class="context-item" onclick="window.changeWallpaper()">
+            <span>🖼️</span> Arka Planı Değiştir
+        </div>
+        <div class="context-item" onclick="window.toggleWidgets()">
+            <span>📊</span> Widget'ları Göster
+        </div>
+        <div class="context-separator"></div>
+        <div class="context-item danger" onclick="window.minimizeAllWindows()">
+            <span>🗑️</span> Tümünü Küçült
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        // State Management
+        const state = {
+            windows: [],
+            activeWindow: null,
+            zIndex: 100,
+            windowCount: 0,
+            isTouch: window.matchMedia('(pointer: coarse)').matches,
+            wallpapers: [
+                'radial-gradient(ellipse at 20% 30%, rgba(120, 119, 198, 0.4) 0%, transparent 50%), radial-gradient(ellipse at 80% 70%, rgba(255, 119, 198, 0.3) 0%, transparent 40%), radial-gradient(ellipse at 50% 50%, rgba(120, 219, 255, 0.2) 0%, transparent 60%), linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)',
+                'radial-gradient(circle at 50% 50%, rgba(255,107,107,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(78,205,196,0.3) 0%, transparent 40%), linear-gradient(135deg, #2c3e50 0%, #34495e 100%)',
+                'radial-gradient(circle at 30% 70%, rgba(247,255,0,0.2) 0%, transparent 50%), radial-gradient(circle at 70% 30%, rgba(0,255,136,0.2) 0%, transparent 40%), linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                'radial-gradient(circle at 50% 120%, rgba(255,0,255,0.3) 0%, transparent 50%), radial-gradient(circle at 20% 50%, rgba(0,255,255,0.2) 0%, transparent 40%), linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)'
+            ],
+            currentWallpaper: 0,
+            calcState: {},
+            apps: {
+                explorer: { name: 'Dosya Gezgini', icon: '📁', color: '#ffd700' },
+                edge: { name: 'Mexa Browser', icon: '🌐', color: '#0078d4' },
+                terminal: { name: 'Terminal', icon: '⌨️', color: '#1e1e1e' },
+                calculator: { name: 'Hesap Makinesi', icon: '🧮', color: '#f0f0f0' },
+                settings: { name: 'Ayarlar', icon: '⚙️', color: '#888888' },
+                store: { name: 'Uygulama Mağazası', icon: '🛍️', color: '#0078d4' },
+                photos: { name: 'Galeri', icon: '🖼️', color: '#9b59b6' },
+                notepad: { name: 'Not Defteri', icon: '📝', color: '#f4f4f4' },
+                mail: { name: 'E-posta', icon: '📧', color: '#0078d4' },
+                calendar: { name: 'Takvim', icon: '📅', color: '#e74c3c' },
+                music: { name: 'Müzik', icon: '🎵', color: '#e91e63' },
+                video: { name: 'Video', icon: '🎬', color: '#9c27b0' }
+            }
+        };
+
+        // Boot Animation
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('boot-screen').classList.add('fade-out');
+                setTimeout(() => {
+                    document.getElementById('boot-screen').style.display = 'none';
+                    document.getElementById('desktop').classList.add('active');
+                    window.showToast('Mexa OS hazır!', '👋', 'Hoş geldiniz user');
+                }, 800);
+            }, 2000);
+        });
+
+        // Global Functions
+        window.toggleStart = function() {
+            const startMenu = document.getElementById('start-menu');
+            startMenu.classList.toggle('open');
+            document.getElementById('notification-center').classList.remove('open');
+            document.getElementById('widgets-panel').classList.remove('open');
+        };
+
+        window.toggleNotifications = function() {
+            const notifCenter = document.getElementById('notification-center');
+            notifCenter.classList.toggle('open');
+            document.getElementById('start-menu').classList.remove('open');
+            document.getElementById('widgets-panel').classList.remove('open');
+        };
+
+        window.toggleWidgets = function() {
+            const widgets = document.getElementById('widgets-panel');
+            widgets.classList.toggle('open');
+            document.getElementById('start-menu').classList.remove('open');
+            document.getElementById('notification-center').classList.remove('open');
+        };
+
+        window.clearNotifications = function() {
+            document.getElementById('notifications-list').innerHTML = 
+                '<div style="text-align: center; color: #666; padding: 40px;">Bildirim yok</div>';
+        };
+
+        window.refreshDesktop = function() {
+            document.getElementById('context-menu').classList.remove('show');
+            window.showToast('Masaüstü yenileniyor...', '🔄');
+            document.querySelector('.wallpaper').style.opacity = '0.5';
+            setTimeout(() => {
+                document.querySelector('.wallpaper').style.opacity = '1';
+            }, 300);
+        };
+
+        window.createNewFolder = function() {
+            document.getElementById('context-menu').classList.remove('show');
+            const grid = document.getElementById('desktop-icons');
+            const folder = document.createElement('div');
+            folder.className = 'desktop-icon';
+            folder.innerHTML = `
+                <div class="icon-container">📁</div>
+                <div class="icon-text" contenteditable="true">Yeni Klasör</div>
+            `;
+            grid.appendChild(folder);
+            
+            const text = folder.querySelector('.icon-text');
+            text.focus();
+            text.select();
+            
+            text.addEventListener('blur', () => {
+                if (!text.textContent.trim()) text.textContent = 'Yeni Klasör';
+            });
+            
+            window.showToast('Yeni klasör oluşturuldu', '📁');
+        };
+
+        window.createNewFile = function() {
+            document.getElementById('context-menu').classList.remove('show');
+            window.showToast('Yeni metin belgesi oluşturuldu', '📄');
+        };
+
+        window.changeWallpaper = function() {
+            document.getElementById('context-menu').classList.remove('show');
+            state.currentWallpaper = (state.currentWallpaper + 1) % state.wallpapers.length;
+            document.querySelector('.wallpaper').style.background = state.wallpapers[state.currentWallpaper];
+            window.showToast('Arka plan değiştirildi', '🖼️');
+        };
+
+        window.minimizeAllWindows = function() {
+            document.getElementById('context-menu').classList.remove('show');
+            state.windows.forEach(w => {
+                if (!w.minimized) window.minimizeWindow(w.id);
+            });
+            window.showToast('Tüm pencereler küçültüldü', '🗑️');
+        };
+
+        window.showToast = function(message, icon = 'ℹ️', title = null) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `
+                <div class="toast-icon">${icon}</div>
+                <div class="toast-content">
+                    ${title ? `<div class="toast-title">${title}</div>` : ''}
+                    <div class="toast-message">${message}</div>
+                </div>
+            `;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
+
+        // Power Menu Functions
+        window.openPowerMenu = function() {
+            document.getElementById('power-menu').classList.add('active');
+            document.getElementById('start-menu').classList.remove('open');
+        };
+
+        window.closePowerMenu = function() {
+            document.getElementById('power-menu').classList.remove('active');
+        };
+
+        window.lockSystem = function() {
+            window.showToast('Sistem kilitleniyor...', '🔒');
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        };
+
+        window.sleepSystem = function() {
+            document.getElementById('power-menu').classList.remove('active');
+            window.showToast('Uyku moduna geçiliyor...', '💤');
+            setTimeout(() => {
+                document.getElementById('desktop').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('desktop').style.opacity = '1';
+                    window.showToast('Sistem uyandırıldı', '☀️');
+                }, 3000);
+            }, 1000);
+        };
+
+        window.shutdownSystem = function() {
+            document.getElementById('power-menu').classList.remove('active');
+            document.getElementById('shutdown-screen').classList.add('active');
+            setTimeout(() => {
+                document.body.innerHTML = '<div style="background:black;height:100vh;width:100vw;"></div>';
+            }, 4000);
+        };
+
+        window.restartSystem = function() {
+            document.getElementById('power-menu').classList.remove('active');
+            document.getElementById('shutdown-screen').classList.add('active');
+            document.querySelector('.shutdown-text').textContent = 'Yeniden başlatılıyor...';
+            setTimeout(() => {
+                location.reload();
+            }, 3000);
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initClock();
+            initStartMenu();
+            initDesktopIcons();
+            initTouchGestures();
+        });
+
+        // Clock
+        function initClock() {
+            const update = () => {
+                const now = new Date();
+                document.getElementById('clock-time').textContent = 
+                    now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('clock-date').textContent = 
+                    now.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                document.getElementById('widget-day').textContent = now.getDate();
+                document.getElementById('widget-full-date').textContent = 
+                    now.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+            };
+            update();
+            setInterval(update, 1000);
+        }
+
+        // Start Menu
+        function initStartMenu() {
+            const pinned = document.getElementById('pinned-apps');
+            const recommended = document.getElementById('recommended-apps');
+            
+            Object.entries(state.apps).slice(0, 6).forEach(([key, appData]) => {
+                pinned.appendChild(createAppIcon(key, appData));
+            });
+            
+            Object.entries(state.apps).slice(6).forEach(([key, appData]) => {
+                recommended.appendChild(createAppIcon(key, appData));
+            });
+        }
+
+        function createAppIcon(key, appData) {
+            const div = document.createElement('div');
+            div.className = 'start-app';
+            div.onclick = () => { window.openApp(key); window.toggleStart(); };
+            div.innerHTML = `
+                <div class="start-app-icon" style="background: ${appData.color}">${appData.icon}</div>
+                <div class="start-app-name">${appData.name}</div>
+            `;
+            return div;
+        }
+
+        // Desktop Icons
+        function initDesktopIcons() {
+            document.querySelectorAll('.desktop-icon').forEach(icon => {
+                const appType = icon.dataset.app;
+                
+                if (state.isTouch) {
+                    icon.addEventListener('click', () => {
+                        document.querySelectorAll('.desktop-icon').forEach(i => i.classList.remove('selected'));
+                        icon.classList.add('selected');
+                        setTimeout(() => window.openApp(appType), 200);
+                    });
+                } else {
+                    icon.addEventListener('dblclick', () => window.openApp(appType));
+                    icon.addEventListener('click', () => {
+                        document.querySelectorAll('.desktop-icon').forEach(i => i.classList.remove('selected'));
+                        icon.classList.add('selected');
+                    });
+                }
+            });
+        }
+
+        // Window Management
+        window.openApp = function(appType) {
+            state.windowCount++;
+            const id = `window-${state.windowCount}`;
+            const appData = state.apps[appType] || { name: 'Uygulama', icon: '📦', color: '#666666' };
+            
+            const win = document.createElement('div');
+            win.className = 'window animating';
+            win.id = id;
+            
+            if (state.isTouch) {
+                win.style.cssText = `
+                    left: 0; top: 0;
+                    width: 100vw;
+                    height: calc(100vh - 72px);
+                    border-radius: 0;
+                `;
+            } else {
+                win.style.cssText = `
+                    width: ${appType === 'calculator' ? '320px' : '900px'};
+                    height: ${appType === 'calculator' ? '500px' : '600px'};
+                    left: ${100 + (state.windowCount * 30)}px;
+                    top: ${50 + (state.windowCount * 30)}px;
+                `;
+            }
+            
+            win.style.zIndex = ++state.zIndex;
+            win.innerHTML = createWindowContent(id, appData, appType);
+            
+            document.getElementById('windows-container').appendChild(win);
+            state.windows.push({ id, element: win, appType, minimized: false, maximized: state.isTouch });
+            state.activeWindow = id;
+            
+            addToTaskbar(id, appData);
+            setupWindowControls(win, id);
+            initAppContent(appType, win, id);
+            
+            setTimeout(() => win.classList.remove('animating'), 300);
+            window.showToast(`${appData.name} açıldı`, appData.icon);
+        };
+
+        function createWindowContent(id, appData, type) {
+            const resizeHandles = !state.isTouch ? `
+                <div class="resize-handle resize-n" data-resize="n"></div>
+                <div class="resize-handle resize-s" data-resize="s"></div>
+                <div class="resize-handle resize-e" data-resize="e"></div>
+                <div class="resize-handle resize-w" data-resize="w"></div>
+                <div class="resize-handle resize-ne" data-resize="ne"></div>
+                <div class="resize-handle resize-nw" data-resize="nw"></div>
+                <div class="resize-handle resize-se" data-resize="se"></div>
+                <div class="resize-handle resize-sw" data-resize="sw"></div>
+            ` : '';
+
+            return `
+                ${resizeHandles}
+                <div class="window-header" data-window-id="${id}">
+                    <div class="window-title">
+                        <div class="window-icon" style="background: ${appData.color}">${appData.icon}</div>
+                        <span>${appData.name}</span>
+                    </div>
+                    <div class="window-controls">
+                        <div class="window-btn minimize" onclick="window.minimizeWindow('${id}')" title="Küçült">─</div>
+                        ${!state.isTouch ? `<div class="window-btn maximize" onclick="window.toggleMaximize('${id}')" title="Ekranı Kapla">□</div>` : ''}
+                        <div class="window-btn close" onclick="window.closeWindow('${id}')" title="Kapat">×</div>
+                    </div>
+                </div>
+                <div class="window-content" id="content-${id}">
+                    ${getAppHTML(type, id)}
+                </div>
+            `;
+        }
+
+        function getAppHTML(type, id) {
+            switch(type) {
+                case 'explorer':
+                    return `
+                        <div class="explorer-toolbar">
+                            <button class="toolbar-btn" onclick="window.showToast('Geri', '⬅️')">⬅️ <span>Geri</span></button>
+                            <button class="toolbar-btn" onclick="window.showToast('İleri', '➡️')">➡️ <span>İleri</span></button>
+                            <button class="toolbar-btn" onclick="window.showToast('Yukarı', '⬆️')">⬆️ <span>Yukarı</span></button>
+                            <div class="address-bar">📁 Bu Bilgisayar > Masaüstü</div>
+                            <button class="toolbar-btn">🔍 <span>Ara</span></button>
+                        </div>
+                        <div class="file-grid">
+                            ${['Belgeler', 'İndirilenler', 'Müzik', 'Videolar', 'Resimler', 'Masaüstü'].map((name, i) => `
+                                <div class="file-item" onclick="this.classList.toggle('selected')">
+                                    <div class="file-icon-large" style="background: hsl(${i * 60}, 70%, 60%)">📁</div>
+                                    <div class="file-name">${name}</div>
+                                    <div class="file-date">${new Date().toLocaleDateString('tr-TR')}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                
+                case 'edge':
+                    return `
+                        <div class="browser-container">
+                            <div class="browser-toolbar">
+                                <div class="browser-actions">
+                                    <div class="browser-btn" onclick="window.showToast('Geri', '⬅️')">⬅️</div>
+                                    <div class="browser-btn" onclick="window.showToast('İleri', '➡️')">➡️</div>
+                                    <div class="browser-btn" onclick="window.showToast('Yenile', '🔄')">🔄</div>
+                                </div>
+                                <div class="browser-address">
+                                    <span>🔒</span>
+                                    <input type="text" value="https://search.mexa.os" onkeydown="if(event.key==='Enter') window.showToast('Sayfa yükleniyor...', '🌐')">
+                                </div>
+                                <div class="browser-btn" onclick="window.showToast('Ayarlar', '⚙️')">⋮</div>
+                            </div>
+                            <div class="browser-content">
+                                <div class="browser-home">
+                                    <div class="browser-logo">🔍</div>
+                                    <h2 style="margin-bottom: 24px; color: #333;">Mexa Search</h2>
+                                    <div class="browser-search">
+                                        <input type="text" placeholder="Ara veya adres girin" onkeydown="if(event.key==='Enter') window.showToast('Aranıyor...', '🔍')">
+                                    </div>
+                                    <div style="margin-top: 40px; display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
+                                        ${['GitHub', 'YouTube', 'Twitter', 'LinkedIn'].map(site => `
+                                            <div style="text-align: center; cursor: pointer;" onclick="window.showToast('${site} açılıyor...', '🌐')">
+                                                <div style="width: 60px; height: 60px; background: #f0f0f0; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 8px;">🌐</div>
+                                                <div style="font-size: 12px; color: #666;">${site}</div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                
+                case 'terminal':
+                    return `
+                        <div class="terminal-container">
+                            <div class="terminal-tabs">
+                                <div class="terminal-tab active">Shell <span style="margin-left: 8px; cursor: pointer;">×</span></div>
+                                <div class="terminal-tab">Terminal</div>
+                                <div class="terminal-tab" style="opacity: 0.6;">+</div>
+                            </div>
+                            <div class="terminal-content" id="terminal-${id}">
+                                <div class="terminal-line">Mexa OS Terminal</div>
+                                <div class="terminal-line">(C) Mexa Systems. Tüm hakları saklıdır.</div>
+                                <div class="terminal-line"></div>
+                                <div class="terminal-line terminal-input-line">
+                                    <span class="terminal-prompt">user@mexa:~$</span>
+                                    <input type="text" class="terminal-input" id="input-${id}" onkeydown="window.handleTerminal(event, '${id}')" autofocus>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                
+                case 'calculator':
+                    return `
+                        <div class="calculator" id="calc-${id}">
+                            <div class="calc-display" id="display-${id}">0</div>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', 'C')">C</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '⌫')">⌫</button>
+                            <button class="calc-btn operator" onclick="window.calcInput('${id}', '/')">÷</button>
+                            <button class="calc-btn operator" onclick="window.calcInput('${id}', '*')">×</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '7')">7</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '8')">8</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '9')">9</button>
+                            <button class="calc-btn operator" onclick="window.calcInput('${id}', '-')">−</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '4')">4</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '5')">5</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '6')">6</button>
+                            <button class="calc-btn operator" onclick="window.calcInput('${id}', '+')">+</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '1')">1</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '2')">2</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '3')">3</button>
+                            <button class="calc-btn equals" onclick="window.calcInput('${id}', '=')" rowspan="2">=</button>
+                            <button class="calc-btn zero" onclick="window.calcInput('${id}', '0')">0</button>
+                            <button class="calc-btn" onclick="window.calcInput('${id}', '.')">.</button>
+                        </div>
+                    `;
+                
+                case 'settings':
+                    return `
+                        <div class="settings-container">
+                            <div class="settings-sidebar">
+                                <div class="settings-search">🔍 Ayarlarda arayın</div>
+                                ${['Sistem', 'Cihazlar', 'Ağ', 'Kişiselleştirme', 'Uygulamalar', 'Hesaplar', 'Zaman', 'Oyun', 'Erişilebilirlik', 'Gizlilik', 'Güncelleme'].map((cat, i) => `
+                                    <div class="settings-category ${i === 0 ? 'active' : ''}" onclick="window.showToast('${cat} ayarları', '⚙️')">
+                                        <span>${['⚙️', '🔵', '📶', '🎨', '📦', '👤', '🕐', '🎮', '♿', '🔒', '🔄'][i]}</span>
+                                        ${cat}
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="settings-content">
+                                <div class="settings-header">Ekran</div>
+                                <div class="setting-item">
+                                    <div class="setting-label">Gece ışığı</div>
+                                    <div class="setting-desc">Akşamları daha sıcak renkler gösterir</div>
+                                    <div class="toggle" onclick="this.classList.toggle('active')"></div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-label">HDR</div>
+                                    <div class="setting-desc">HDR içeriğini optimize edin</div>
+                                    <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-label">Ölçek</div>
+                                    <div class="setting-desc">Metin, uygulama ve diğer öğelerin boyutunu değiştirin</div>
+                                    <select style="margin-top: 8px; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                                        <option>%100 (Önerilen)</option>
+                                        <option>%125</option>
+                                        <option>%150</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                
+                case 'notepad':
+                    return `
+                        <div style="height: 100%; display: flex; flex-direction: column;">
+                            <div class="explorer-toolbar" style="border-bottom: 1px solid #e0e0e0;">
+                                <button class="toolbar-btn" onclick="window.showToast('Yeni dosya', '📄')">Yeni</button>
+                                <button class="toolbar-btn" onclick="window.showToast('Açılıyor...', '📂')">Aç</button>
+                                <button class="toolbar-btn" onclick="window.showToast('Kaydedildi', '💾')">Kaydet</button>
+                            </div>
+                            <textarea style="flex: 1; border: none; outline: none; padding: 16px; font-family: Consolas, monospace; font-size: 14px; resize: none;" placeholder="Buraya yazın..."></textarea>
+                        </div>
+                    `;
+                
+                default:
+                    return `
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666;">
+                            <div style="font-size: 64px; margin-bottom: 16px;">${appData.icon}</div>
+                            <h2>${appData.name}</h2>
+                            <p style="margin-top: 8px;">Bu uygulama simülasyon modunda</p>
+                            <button class="toolbar-btn" style="margin-top: 24px;" onclick="window.showToast('Yakında...', '🔜')">Daha fazla bilgi</button>
+                        </div>
+                    `;
+            }
+        }
+
+        function initAppContent(type, win, id) {
+            if (type === 'terminal') {
+                setTimeout(() => {
+                    const input = win.querySelector(`#input-${id}`);
+                    if (input) input.focus();
+                }, 100);
+            }
+        }
+
+        // Calculator Logic
+        window.calcInput = function(id, val) {
+            if (!state.calcState[id]) state.calcState[id] = { display: '0', prev: null, op: null, newInput: true };
+            const calc = state.calcState[id];
+            
+            if (val === 'C') {
+                calc.display = '0';
+                calc.prev = null;
+                calc.op = null;
+            } else if (val === '⌫') {
+                calc.display = calc.display.slice(0, -1) || '0';
+            } else if (val === '=') {
+                if (calc.prev !== null && calc.op) {
+                    const prev = parseFloat(calc.prev);
+                    const curr = parseFloat(calc.display);
+                    switch(calc.op) {
+                        case '+': calc.display = String(prev + curr); break;
+                        case '-': calc.display = String(prev - curr); break;
+                        case '*': calc.display = String(prev * curr); break;
+                        case '/': calc.display = curr !== 0 ? String(prev / curr) : 'Error'; break;
+                    }
+                    calc.prev = null;
+                    calc.op = null;
+                }
+            } else if ('+-*/'.includes(val)) {
+                calc.prev = calc.display;
+                calc.op = val;
+                calc.newInput = true;
+            } else {
+                if (calc.newInput) {
+                    calc.display = val === '.' ? '0.' : val;
+                    calc.newInput = false;
+                } else {
+                    if (val === '.' && calc.display.includes('.')) return;
+                    calc.display = calc.display === '0' ? val : calc.display + val;
+                }
+            }
+            
+            document.getElementById(`display-${id}`).textContent = calc.display;
+        };
+
+        // Terminal Logic
+        window.handleTerminal = function(e, id) {
+            if (e.key !== 'Enter') return;
+            
+            const input = e.target;
+            const cmd = input.value.trim();
+            const terminal = document.getElementById(`terminal-${id}`);
+            
+            const cmdLine = document.createElement('div');
+            cmdLine.className = 'terminal-line';
+            cmdLine.innerHTML = `<span class="terminal-prompt">user@mexa:~$</span> ${cmd}`;
+            terminal.insertBefore(cmdLine, input.parentElement);
+            
+            let response = '';
+            const args = cmd.split(' ');
+            const command = args[0].toLowerCase();
+            
+            switch(command) {
+                case 'help':
+                    response = 'Kullanılabilir komutlar: help, cls, dir, ls, echo, date, time, ver, calc, whoami, exit';
+                    break;
+                case 'cls':
+                case 'clear':
+                    terminal.innerHTML = '';
+                    break;
+                case 'dir':
+                case 'ls':
+                    response = 'Dizin: /home/user\n\n01.02.2026  14:30    &lt;DIR&gt;          Belgeler\n01.02.2026  14:30    &lt;DIR&gt;          Masaüstü\n01.02.2026  14:30    &lt;DIR&gt;          İndirilenler\n01.02.2026  14:30             1.024 not.txt\n01.02.2026  14:30             2.048 script.sh';
+                    break;
+                case 'echo':
+                    response = args.slice(1).join(' ') || '';
+                    break;
+                case 'date':
+                    response = new Date().toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    break;
+                case 'time':
+                    response = new Date().toLocaleTimeString('tr-TR');
+                    break;
+                case 'ver':
+                case 'version':
+                    response = 'Mexa OS [Sürüm 11.0.22621.1]\nMexa Systems\n(C) Mexa Systems. Tüm hakları saklıdır.';
+                    break;
+                case 'whoami':
+                    response = 'user';
+                    break;
+                case 'calc':
+                    window.openApp('calculator');
+                    response = 'Hesap makinesi açıldı.';
+                    break;
+                case 'exit':
+                    window.closeWindow(id);
+                    return;
+                case '':
+                    break;
+                default:
+                    response = `Komut bulunamadı: ${command}`;
+            }
+            
+            if (response) {
+                const respLine = document.createElement('div');
+                respLine.className = 'terminal-line';
+                respLine.innerHTML = response.replace(/\n/g, '<br>');
+                terminal.insertBefore(respLine, input.parentElement);
+            }
+            
+            input.value = '';
+            terminal.scrollTop = terminal.scrollHeight;
+        };
+
+        // Window Controls
+        function addToTaskbar(id, appData) {
+            const tb = document.getElementById('taskbar-apps');
+            const item = document.createElement('div');
+            item.className = 'taskbar-item active';
+            item.id = `tb-${id}`;
+            item.innerHTML = appData.icon;
+            item.title = appData.name;
+            item.onclick = () => {
+                const win = state.windows.find(w => w.id === id);
+                if (win.minimized) window.restoreWindow(id);
+                else if (state.activeWindow === id) window.minimizeWindow(id);
+                else focusWindow(id);
+            };
+            tb.appendChild(item);
+        }
+
+        function removeFromTaskbar(id) {
+            const item = document.getElementById(`tb-${id}`);
+            if (item) item.remove();
+        }
+
+        function focusWindow(id) {
+            const win = state.windows.find(w => w.id === id);
+            if (!win || win.minimized) return;
+            
+            win.element.style.zIndex = ++state.zIndex;
+            state.activeWindow = id;
+            
+            document.querySelectorAll('.taskbar-item').forEach(i => i.classList.remove('active'));
+            const taskbarItem = document.getElementById(`tb-${id}`);
+            if (taskbarItem) taskbarItem.classList.add('active');
+        }
+
+        window.closeWindow = function(id) {
+            const idx = state.windows.findIndex(w => w.id === id);
+            if (idx === -1) return;
+            
+            const win = state.windows[idx];
+            win.element.style.animation = 'windowOpen 0.2s reverse';
+            
+            setTimeout(() => {
+                win.element.remove();
+                state.windows.splice(idx, 1);
+                removeFromTaskbar(id);
+                if (state.activeWindow === id) {
+                    const others = state.windows.filter(w => !w.minimized);
+                    state.activeWindow = others.length ? others[others.length - 1].id : null;
+                }
+            }, 200);
+        };
+
+        window.minimizeWindow = function(id) {
+            const win = state.windows.find(w => w.id === id);
+            if (!win) return;
+            
+            win.minimized = true;
+            win.element.classList.add('minimized');
+            const tbItem = document.getElementById(`tb-${id}`);
+            if (tbItem) tbItem.classList.remove('active');
+            
+            const others = state.windows.filter(w => !w.minimized && w.id !== id);
+            state.activeWindow = others.length ? others[others.length - 1].id : null;
+        };
+
+        window.restoreWindow = function(id) {
+            const win = state.windows.find(w => w.id === id);
+            if (!win) return;
+            
+            win.minimized = false;
+            win.element.classList.remove('minimized');
+            focusWindow(id);
+        };
+
+        window.toggleMaximize = function(id) {
+            if (state.isTouch) return;
+            
+            const win = state.windows.find(w => w.id === id);
+            if (!win) return;
+            
+            win.maximized = !win.maximized;
+            win.element.classList.toggle('maximized');
+        };
+
+        // Drag and Resize
+        function setupWindowControls(win, id) {
+            if (state.isTouch) return;
+            
+            const header = win.querySelector('.window-header');
+            let isDragging = false, startX, startY, startLeft, startTop;
+            
+            header.addEventListener('mousedown', (e) => {
+                if (e.target.closest('.window-controls')) return;
+                
+                const winData = state.windows.find(w => w.id === id);
+                if (winData && winData.maximized) return;
+                
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                startLeft = win.offsetLeft;
+                startTop = win.offsetTop;
+                
+                document.addEventListener('mousemove', onDrag);
+                document.addEventListener('mouseup', stopDrag);
+            });
+            
+            function onDrag(e) {
+                if (!isDragging) return;
+                
+                const x = e.clientX - startX;
+                const y = e.clientY - startY;
+                
+                win.style.left = `${startLeft + x}px`;
+                win.style.top = `${startTop + y}px`;
+                
+                const zones = document.getElementById('snap-zones');
+                if (e.clientY < 50) zones.classList.add('active');
+                else if (e.clientX < 100) zones.classList.add('active');
+                else if (e.clientX > window.innerWidth - 100) zones.classList.add('active');
+                else zones.classList.remove('active');
+            }
+            
+            function stopDrag(e) {
+                isDragging = false;
+                document.getElementById('snap-zones').classList.remove('active');
+                
+                if (e.clientY < 50) {
+                    window.toggleMaximize(id);
+                } else if (e.clientX < 100) {
+                    win.classList.add('snap-left');
+                    setTimeout(() => win.classList.remove('snap-left'), 300);
+                    win.style.cssText = 'left: 0; top: 0; width: 50%; height: calc(100vh - 70px);';
+                } else if (e.clientX > window.innerWidth - 100) {
+                    win.classList.add('snap-right');
+                    setTimeout(() => win.classList.remove('snap-right'), 300);
+                    win.style.cssText = 'left: 50%; top: 0; width: 50%; height: calc(100vh - 70px);';
+                }
+                
+                document.removeEventListener('mousemove', onDrag);
+                document.removeEventListener('mouseup', stopDrag);
+            }
+            
+            win.querySelectorAll('.resize-handle').forEach(handle => {
+                handle.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                    const direction = handle.dataset.resize;
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const startWidth = win.offsetWidth;
+                    const startHeight = win.offsetHeight;
+                    const startLeft = win.offsetLeft;
+                    const startTop = win.offsetTop;
+                    
+                    function onResize(e) {
+                        const dx = e.clientX - startX;
+                        const dy = e.clientY - startY;
+                        
+                        if (direction.includes('e')) win.style.width = `${startWidth + dx}px`;
+                        if (direction.includes('s')) win.style.height = `${startHeight + dy}px`;
+                        if (direction.includes('w')) {
+                            win.style.width = `${startWidth - dx}px`;
+                            win.style.left = `${startLeft + dx}px`;
+                        }
+                        if (direction.includes('n')) {
+                            win.style.height = `${startHeight - dy}px`;
+                            win.style.top = `${startTop + dy}px`;
+                        }
+                    }
+                    
+                    function stopResize() {
+                        document.removeEventListener('mousemove', onResize);
+                        document.removeEventListener('mouseup', stopResize);
+                    }
+                    
+                    document.addEventListener('mousemove', onResize);
+                    document.addEventListener('mouseup', stopResize);
+                });
+            });
+            
+            win.addEventListener('mousedown', () => focusWindow(id));
+        }
+
+        // Touch Gestures
+        function initTouchGestures() {
+            if (!state.isTouch) return;
+            
+            let touchStartY = 0;
+            let touchStartX = 0;
+            
+            document.addEventListener('touchstart', (e) => {
+                touchStartY = e.touches[0].clientY;
+                touchStartX = e.touches[0].clientX;
+            }, { passive: true });
+            
+            document.addEventListener('touchend', (e) => {
+                const touchEndY = e.changedTouches[0].clientY;
+                const touchEndX = e.changedTouches[0].clientX;
+                const diffY = touchStartY - touchEndY;
+                const diffX = touchStartX - touchEndX;
+                
+                if (touchStartY > window.innerHeight - 100 && diffY > 100 && Math.abs(diffX) < 50) {
+                    window.toggleStart();
+                }
+                
+                if (touchStartY < 100 && diffY < -100 && document.getElementById('start-menu').classList.contains('open')) {
+                    window.toggleStart();
+                }
+            }, { passive: true });
+        }
+
+        // Context Menu
+        const desktop = document.getElementById('desktop');
+        const contextMenu = document.getElementById('context-menu');
+        
+        desktop.addEventListener('contextmenu', (e) => {
+            if (e.target.closest('.window') || e.target.closest('.taskbar-item')) return;
+            e.preventDefault();
+            
+            const x = Math.min(e.clientX, window.innerWidth - 220);
+            const y = Math.min(e.clientY, window.innerHeight - 300);
+            
+            contextMenu.style.left = `${x}px`;
+            contextMenu.style.top = `${y}px`;
+            contextMenu.classList.add('show');
+        });
+        
+        let longPressTimer;
+        desktop.addEventListener('touchstart', (e) => {
+            if (e.target.closest('.window') || e.target.closest('.desktop-icon')) return;
+            longPressTimer = setTimeout(() => {
+                const touch = e.touches[0];
+                contextMenu.style.left = `${touch.clientX}px`;
+                contextMenu.style.top = `${touch.clientY}px`;
+                contextMenu.classList.add('show');
+            }, 500);
+        }, { passive: true });
+        
+        desktop.addEventListener('touchend', () => clearTimeout(longPressTimer));
+        desktop.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+        
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.context-menu')) {
+                contextMenu.classList.remove('show');
+            }
+            if (!e.target.closest('#start-menu') && !e.target.closest('.start-btn')) {
+                document.getElementById('start-menu').classList.remove('open');
+            }
+            if (!e.target.closest('#notification-center') && !e.target.closest('.clock')) {
+                document.getElementById('notification-center').classList.remove('open');
+            }
+            if (!e.target.closest('#widgets-panel')) {
+                document.getElementById('widgets-panel').classList.remove('open');
+            }
+        });
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Meta' || (e.ctrlKey && e.key === 'Escape')) {
+                e.preventDefault();
+                window.toggleStart();
+            }
+            if (e.key === 'F5') window.refreshDesktop();
+            if (e.altKey && e.key === 'F4' && state.activeWindow) {
+                window.closeWindow(state.activeWindow);
+            }
+        });
+
+        console.log('🚀 Mexa OS initialized');
+    </script>
+</body>
+</html>
