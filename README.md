@@ -1,6 +1,3 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/OxygenForge-code/mexa-os/main/assets/logo.png" width="120" height="120" alt="Mexa OS Logo">
-</p>
 
 <h1 align="center">🪟 Mexa OS</h1>
 
