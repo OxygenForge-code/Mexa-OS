@@ -1899,7 +1899,11 @@
             
             const text = folder.querySelector('.icon-text');
             text.focus();
-            text.select();
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(text);
+            selection.removeAllRanges();
+            selection.addRange(range);
             
             text.addEventListener('blur', () => {
                 if (!text.textContent.trim()) text.textContent = 'Yeni Klasör';
@@ -2317,6 +2321,7 @@
                 calc.display = '0';
                 calc.prev = null;
                 calc.op = null;
+                calc.newInput = true;
             } else if (val === '⌫') {
                 calc.display = calc.display.slice(0, -1) || '0';
             } else if (val === '=') {
@@ -2331,6 +2336,7 @@
                     }
                     calc.prev = null;
                     calc.op = null;
+                    calc.newInput = true;
                 }
             } else if ('+-*/'.includes(val)) {
                 calc.prev = calc.display;
@@ -2371,9 +2377,13 @@
                     response = 'Kullanılabilir komutlar: help, cls, dir, ls, echo, date, time, ver, calc, whoami, exit';
                     break;
                 case 'cls':
-                case 'clear':
+                case 'clear': {
+                    const inputLine = input.parentElement;
                     terminal.innerHTML = '';
+                    terminal.appendChild(inputLine);
+                    response = '';
                     break;
+                }
                 case 'dir':
                 case 'ls':
                     response = 'Dizin: /home/user\n\n01.02.2026  14:30    &lt;DIR&gt;          Belgeler\n01.02.2026  14:30    &lt;DIR&gt;          Masaüstü\n01.02.2026  14:30    &lt;DIR&gt;          İndirilenler\n01.02.2026  14:30             1.024 not.txt\n01.02.2026  14:30             2.048 script.sh';
@@ -2680,7 +2690,10 @@
                 e.preventDefault();
                 window.toggleStart();
             }
-            if (e.key === 'F5') window.refreshDesktop();
+            if (e.key === 'F5') {
+                e.preventDefault();
+                window.refreshDesktop();
+            }
             if (e.altKey && e.key === 'F4' && state.activeWindow) {
                 window.closeWindow(state.activeWindow);
             }
