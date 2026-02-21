@@ -1969,6 +1969,7 @@
                 activeHours: '09:00 - 18:00',
                 healthScore: 92,
                 storeUnlocked: false,
+                storeActivationPending: false,
                 updateHistory: [
                     { version: '11.0.22621.1', date: '07.02.2026', note: 'Kararlılık geliştirmeleri ve görev çubuğu performans iyileştirmeleri.' }
                 ]
@@ -2137,12 +2138,7 @@
         };
 
         window.restartSystem = function() {
-            document.getElementById('power-menu').classList.remove('active');
-            document.getElementById('shutdown-screen').classList.add('active');
-            document.querySelector('.shutdown-text').textContent = 'Yeniden başlatılıyor...';
-            setTimeout(() => {
-                location.reload();
-            }, 3000);
+            window.performSoftRestart();
         };
 
         // Initialize
@@ -2278,7 +2274,7 @@
                 : update
                     ? `Yeni sürüm hazır: ${update.version} (${update.ring})`
                     : state.system.rebootRequired
-                        ? 'Yeniden başlatma bekleniyor'
+                        ? 'Yeniden başlatma gerekiyor'
                         : 'Cihazınız güncel görünüyor';
 
             return `
@@ -2353,9 +2349,17 @@
 
                         <div class="setting-item">
                             <div class="setting-label">Mağaza servisi</div>
-                            <div class="setting-desc">Beta güncellemesi yüklendiğinde mağaza tüm özellikleriyle otomatik açılır.</div>
-                            <div class="store-chip ${state.system.storeUnlocked ? 'ready' : 'locked'}">${state.system.storeUnlocked ? '🟢 Mexa Store aktif' : '🟠 Mağaza kilitli - beta paketi bekleniyor'}</div>
+                            <div class="setting-desc">Beta güncellemesi sonrası mağaza aktivasyonu güvenlik için yeniden başlatmadan sonra tamamlanır.</div>
+                            <div class="store-chip ${state.system.storeUnlocked ? 'ready' : 'locked'}">${state.system.storeUnlocked ? '🟢 Mexa Store aktif' : (state.system.storeActivationPending ? '🟠 Mağaza hazır - yeniden başlatma bekleniyor' : '🟠 Mağaza kilitli - beta paketi bekleniyor')}</div>
                         </div>
+
+                        ${state.system.rebootRequired ? `
+                            <div class="setting-item">
+                                <div class="setting-label">Yeniden başlatma gerekli</div>
+                                <div class="setting-desc">Yüklenen güncellemenin tamamlanması ve mağaza servisinin açılması için sistemi yeniden başlatın.</div>
+                                <button class="settings-btn primary" onclick="window.performSoftRestart()">Şimdi yeniden başlat</button>
+                            </div>
+                        ` : ''}
 
                         <div class="setting-item">
                             <div class="setting-label">Bakım araçları</div>
@@ -2398,6 +2402,35 @@
                 .filter(win => win.appType === 'settings')
                 .forEach(win => refreshSettingsWindow(win.id));
         }
+
+        function finalizePendingRestartActions() {
+            if (state.system.storeActivationPending) {
+                state.system.storeUnlocked = true;
+                state.system.storeActivationPending = false;
+                window.showToast('Beta güncellemesi tamamlandı: Mexa Store etkinleştirildi', '🛍️');
+            }
+            state.system.rebootRequired = false;
+            refreshAllSettingsWindows();
+            refreshWindowsByType('store');
+        }
+
+        window.performSoftRestart = function() {
+            document.getElementById('power-menu').classList.remove('active');
+            const shutdownScreen = document.getElementById('shutdown-screen');
+            const shutdownText = document.querySelector('.shutdown-text');
+            shutdownScreen.classList.add('active');
+            shutdownText.textContent = 'Yeniden başlatılıyor...';
+
+            setTimeout(() => {
+                shutdownScreen.classList.remove('active');
+                shutdownText.textContent = 'Bilgisayarınız kapatılıyor...';
+                document.getElementById('start-menu').classList.remove('open');
+                document.getElementById('notification-center').classList.remove('open');
+                document.getElementById('widgets-panel').classList.remove('open');
+                finalizePendingRestartActions();
+                window.showToast('Sistem yeniden başlatıldı', '🔄');
+            }, 2800);
+        };
 
         window.toggleAutoCheck = function() {
             state.system.autoCheck = !state.system.autoCheck;
@@ -2481,12 +2514,12 @@
                     state.system.rebootRequired = true;
 
                     if (update.ring === 'Beta') {
-                        state.system.storeUnlocked = true;
-                        refreshWindowsByType('store');
+                        state.system.storeActivationPending = true;
                     }
 
                     refreshAllSettingsWindows();
-                    window.showToast(`Sistem ${update.version} sürümüne güncellendi`, '🚀');
+                    refreshWindowsByType('store');
+                    window.showToast(`Sistem ${update.version} sürümüne güncellendi. Değişiklikler için yeniden başlatın`, '🚀');
                 }
             }, 240);
         };
@@ -2635,8 +2668,8 @@
                             <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; padding:24px;">
                                 <div style="font-size:58px; margin-bottom:12px;">🔒</div>
                                 <h2 style="margin-bottom:10px; color:#2d3748;">Mexa Store henüz kilitli</h2>
-                                <p style="max-width:520px; color:#64748b; line-height:1.5;">Mağazayı tamamen etkinleştirmek için Ayarlar &gt; Güncelleme bölümünden beta güncellemelerini açıp en son beta paketini kurun.</p>
-                                <button class="settings-btn primary" style="margin-top:16px;" onclick="window.openApp('settings')">Ayarları aç</button>
+                                <p style="max-width:520px; color:#64748b; line-height:1.5;">${state.system.storeActivationPending ? 'Beta paketi kuruldu. Mağazayı etkinleştirmek için sistemi yeniden başlatın.' : 'Mağazayı tamamen etkinleştirmek için Ayarlar > Güncelleme bölümünden beta güncellemelerini açıp en son beta paketini kurun.'}</p>
+                                ${state.system.storeActivationPending ? '<button class="settings-btn primary" style="margin-top:16px;" onclick="window.performSoftRestart()">Yeniden başlat</button>' : '<button class="settings-btn primary" style="margin-top:16px;" onclick="window.openApp(\'settings\')">Ayarları aç</button>'}
                             </div>
                         `;
                     }
@@ -2759,7 +2792,7 @@
             
             switch(command) {
                 case 'help':
-                    response = 'Kullanılabilir komutlar: help, cls, dir, ls, echo, date, time, ver, calc, whoami, apps, settings, neofetch, update, installupdate, betaon, betaoff, syshealth, storestatus, exit';
+                    response = 'Kullanılabilir komutlar: help, cls, dir, ls, echo, date, time, ver, calc, whoami, apps, settings, neofetch, update, installupdate, betaon, betaoff, restart, syshealth, storestatus, exit';
                     break;
                 case 'cls':
                 case 'clear':
@@ -2828,10 +2861,16 @@
                     response = 'Kararlı güncelleme kanalına geçildi.';
                     refreshAllSettingsWindows();
                     break;
+                case 'restart':
+                    response = 'Sistem yeniden başlatılıyor...';
+                    window.performSoftRestart();
+                    break;
                 case 'storestatus':
                     response = state.system.storeUnlocked
                         ? 'Mexa Store aktif ve kullanılabilir.'
-                        : 'Mexa Store kilitli. Beta güncellemesi yükleyin.';
+                        : (state.system.storeActivationPending
+                            ? 'Mexa Store için yeniden başlatma gerekiyor.'
+                            : 'Mexa Store kilitli. Beta güncellemesi yükleyin.');
                     break;
                 case 'syshealth':
                     response = `Sistem sağlık puanı: ${state.system.healthScore}/100
