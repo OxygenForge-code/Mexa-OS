@@ -1378,6 +1378,62 @@
             margin-bottom: 10px;
         }
 
+        .settings-progress-track {
+            width: 100%;
+            height: 12px;
+            border-radius: 999px;
+            background: #e9eef5;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .settings-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0078d4, #00a4ef);
+            transition: width 0.25s ease;
+            position: relative;
+        }
+
+        .settings-progress-fill::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, transparent 20%, rgba(255,255,255,0.55) 45%, transparent 70%);
+            animation: settingsShimmer 1.4s linear infinite;
+        }
+
+        @keyframes settingsShimmer {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(120%); }
+        }
+
+        .settings-kpi {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1f2a37;
+            margin-bottom: 4px;
+        }
+
+        .store-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .store-chip.ready {
+            background: #e8f8ee;
+            color: #166534;
+        }
+
+        .store-chip.locked {
+            background: #fff5e8;
+            color: #9a3412;
+        }
+
         /* Mobile Optimizations */
         @media (max-width: 768px) {
             .desktop-grid {
@@ -1905,6 +1961,14 @@
                 betaEnabled: false,
                 lastChecked: null,
                 pendingUpdate: null,
+                updateInProgress: false,
+                updateProgress: 0,
+                rebootRequired: false,
+                autoCheck: true,
+                autoInstallAtNight: false,
+                activeHours: '09:00 - 18:00',
+                healthScore: 92,
+                storeUnlocked: false,
                 updateHistory: [
                     { version: '11.0.22621.1', date: '07.02.2026', note: 'Kararlılık geliştirmeleri ve görev çubuğu performans iyileştirmeleri.' }
                 ]
@@ -2192,13 +2256,30 @@
             window.showToast(`${appData.name} açıldı`, appData.icon);
         };
 
+        function getNextUpdatePayload() {
+            const betaPatch = `23${Math.floor(20 + Math.random() * 60)}.${Math.floor(10 + Math.random() * 80)}`;
+            const stablePatch = `22621.${Math.floor(35 + Math.random() * 50)}`;
+            const ring = state.system.betaEnabled ? 'Beta' : 'Kararlı';
+            return {
+                version: `11.0.${state.system.betaEnabled ? betaPatch : stablePatch}`,
+                ring,
+                note: state.system.betaEnabled
+                    ? 'Yeni görev çubuğu efektleri, mağaza performans yükseltmesi ve deneysel özellik iyileştirmeleri.'
+                    : 'Güvenlik düzeltmeleri, sürücü kararlılığı ve sistem performans optimizasyonları.'
+            };
+        }
+
         function createSettingsContent(id) {
             const update = state.system.pendingUpdate;
             const channelText = state.system.betaEnabled ? 'Beta Kanalı' : 'Kararlı Kanal';
             const lastChecked = state.system.lastChecked || 'Henüz kontrol edilmedi';
-            const updateStatus = update
-                ? `Yeni sürüm hazır: ${update.version} (${update.ring})`
-                : 'Cihazınız güncel görünüyor';
+            const updateStatus = state.system.updateInProgress
+                ? `Kurulum devam ediyor... %${state.system.updateProgress}`
+                : update
+                    ? `Yeni sürüm hazır: ${update.version} (${update.ring})`
+                    : state.system.rebootRequired
+                        ? 'Yeniden başlatma bekleniyor'
+                        : 'Cihazınız güncel görünüyor';
 
             return `
                 <div class="settings-container" data-settings-id="${id}">
@@ -2218,8 +2299,13 @@
                                 <div class="settings-pill">📦 Sürüm ${state.system.version}</div>
                                 <div style="font-size: 18px; font-weight: 600; margin-top: 8px; color: #1f2a37;">Sistem durumu: ${updateStatus}</div>
                                 <div style="font-size: 13px; color: #596579; margin-top: 6px;">Son denetim: ${lastChecked}</div>
+                                ${state.system.updateInProgress ? `
+                                    <div class="settings-progress-track">
+                                        <div class="settings-progress-fill" style="width:${state.system.updateProgress}%;"></div>
+                                    </div>
+                                ` : ''}
                             </div>
-                            <button class="settings-btn primary" onclick="window.checkSystemUpdates('${id}')">Güncellemeleri denetle</button>
+                            <button class="settings-btn primary" onclick="window.checkSystemUpdates('${id}')" ${state.system.updateInProgress ? 'disabled' : ''}>Güncellemeleri denetle</button>
                         </div>
 
                         <div class="settings-grid">
@@ -2228,35 +2314,62 @@
                                 <p>Kararlı kanal ile beta kanal arasında geçiş yaparak yeni özellikleri daha erken test edebilirsiniz.</p>
                                 <div class="settings-row">
                                     <span class="settings-pill" id="update-channel-${id}">${channelText}</span>
-                                    <button class="settings-btn" onclick="window.toggleBetaUpdates('${id}')">Beta güncellemeleri ${state.system.betaEnabled ? 'kapat' : 'aç'}</button>
+                                    <button class="settings-btn" onclick="window.toggleBetaUpdates('${id}')" ${state.system.updateInProgress ? 'disabled' : ''}>Beta güncellemeleri ${state.system.betaEnabled ? 'kapat' : 'aç'}</button>
                                 </div>
                             </div>
                             <div class="settings-card">
-                                <h4>İndirme optimizasyonu</h4>
-                                <p>Arka planda paketleri düşük öncelikle indirir, pildeyken geciktirir.</p>
-                                <div class="toggle active" onclick="this.classList.toggle('active');window.showToast('İndirme optimizasyonu güncellendi', '⚡')"></div>
+                                <h4>Otomatik denetim</h4>
+                                <p>Her açılışta güncelleme kontrol eder.</p>
+                                <div class="toggle ${state.system.autoCheck ? 'active' : ''}" onclick="window.toggleAutoCheck()"></div>
                             </div>
                             <div class="settings-card">
-                                <h4>Aktif saatler</h4>
-                                <p>Çalışma saatlerinde yeniden başlatma önerisi göstermez.</p>
-                                <select style="padding: 8px; border-radius: 8px; border: 1px solid #ddd; width: 100%;">
-                                    <option>09:00 - 18:00</option>
-                                    <option>08:00 - 17:00</option>
-                                    <option>10:00 - 19:00</option>
-                                </select>
+                                <h4>Gece otomatik kurulum</h4>
+                                <p>Uygun paketleri 02:00-05:00 arası otomatik kurar.</p>
+                                <div class="toggle ${state.system.autoInstallAtNight ? 'active' : ''}" onclick="window.toggleNightInstall()"></div>
                             </div>
+                            <div class="settings-card">
+                                <h4>Sistem sağlık puanı</h4>
+                                <div class="settings-kpi">${state.system.healthScore}/100</div>
+                                <p>Önbellek temizliği, bileşen onarımı ve disk taraması ile puanı artırabilirsiniz.</p>
+                                <button class="settings-btn" onclick="window.runSystemScan()">Hızlı tarama çalıştır</button>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-label">Aktif saatler</div>
+                            <div class="setting-desc">Bu saatlerde yeniden başlatma önerisi gösterilmez.</div>
+                            <select style="padding: 8px; border-radius: 8px; border: 1px solid #ddd; width: 100%; max-width: 240px;" onchange="window.setActiveHours(this.value)">
+                                ${['09:00 - 18:00', '08:00 - 17:00', '10:00 - 19:00', '12:00 - 21:00'].map(option => `<option ${state.system.activeHours === option ? 'selected' : ''}>${option}</option>`).join('')}
+                            </select>
                         </div>
 
                         <div class="setting-item">
                             <div class="setting-label">Hazır bekleyen paket</div>
                             <div class="setting-desc" id="pending-update-${id}">${update ? `${update.version} (${update.ring}) indirildi ve kurulmaya hazır.` : 'Kurulacak bir paket bulunamadı.'}</div>
-                            <button class="settings-btn" onclick="window.installSystemUpdate('${id}')" ${update ? '' : 'disabled'} id="install-update-${id}">Şimdi yükle</button>
+                            <button class="settings-btn" onclick="window.installSystemUpdate('${id}')" ${(update && !state.system.updateInProgress) ? '' : 'disabled'} id="install-update-${id}">
+                                ${state.system.updateInProgress ? `Kuruluyor... %${state.system.updateProgress}` : 'Şimdi yükle'}
+                            </button>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-label">Mağaza servisi</div>
+                            <div class="setting-desc">Beta güncellemesi yüklendiğinde mağaza tüm özellikleriyle otomatik açılır.</div>
+                            <div class="store-chip ${state.system.storeUnlocked ? 'ready' : 'locked'}">${state.system.storeUnlocked ? '🟢 Mexa Store aktif' : '🟠 Mağaza kilitli - beta paketi bekleniyor'}</div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-label">Bakım araçları</div>
+                            <div class="setting-desc">Temizlik ve onarım işlemleri sistem performansını iyileştirir.</div>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                <button class="settings-btn" onclick="window.runCleanup()">Önbellek temizle</button>
+                                <button class="settings-btn" onclick="window.repairComponents()">Bileşenleri onar</button>
+                            </div>
                         </div>
 
                         <div class="setting-item">
                             <div class="setting-label">Son güncelleme geçmişi</div>
                             <div id="update-history-${id}">
-                                ${state.system.updateHistory.slice(0, 3).map(item => `<div style="font-size: 13px; color: #4a5568; margin-bottom: 6px;">✅ ${item.date} · ${item.version} — ${item.note}</div>`).join('')}
+                                ${state.system.updateHistory.slice(0, 5).map(item => `<div style="font-size: 13px; color: #4a5568; margin-bottom: 6px;">✅ ${item.date} · ${item.version} — ${item.note}</div>`).join('')}
                             </div>
                         </div>
                     </div>
@@ -2271,11 +2384,55 @@
             if (content) content.innerHTML = createSettingsContent(id);
         }
 
+        function refreshWindowsByType(appType) {
+            state.windows
+                .filter(win => win.appType === appType)
+                .forEach(win => {
+                    const content = win.element.querySelector('.window-content');
+                    if (content) content.innerHTML = getAppHTML(appType, win.id);
+                });
+        }
+
         function refreshAllSettingsWindows() {
             state.windows
                 .filter(win => win.appType === 'settings')
                 .forEach(win => refreshSettingsWindow(win.id));
         }
+
+        window.toggleAutoCheck = function() {
+            state.system.autoCheck = !state.system.autoCheck;
+            refreshAllSettingsWindows();
+            window.showToast(`Otomatik denetim ${state.system.autoCheck ? 'açıldı' : 'kapatıldı'}`, '🔁');
+        };
+
+        window.toggleNightInstall = function() {
+            state.system.autoInstallAtNight = !state.system.autoInstallAtNight;
+            refreshAllSettingsWindows();
+            window.showToast(`Gece kurulumu ${state.system.autoInstallAtNight ? 'etkin' : 'pasif'}`, '🌙');
+        };
+
+        window.setActiveHours = function(hours) {
+            state.system.activeHours = hours;
+            window.showToast(`Aktif saatler güncellendi: ${hours}`, '🕒');
+        };
+
+        window.runSystemScan = function() {
+            state.system.healthScore = Math.min(100, state.system.healthScore + 2);
+            refreshAllSettingsWindows();
+            window.showToast('Hızlı sistem taraması tamamlandı', '🩺');
+        };
+
+        window.runCleanup = function() {
+            state.system.healthScore = Math.min(100, state.system.healthScore + 3);
+            window.showToast('Önbellek temizlendi, yaklaşık 420MB alan açıldı', '🧹');
+            refreshAllSettingsWindows();
+        };
+
+        window.repairComponents = function() {
+            state.system.healthScore = Math.min(100, state.system.healthScore + 4);
+            window.showToast('Sistem bileşenleri onarıldı', '🧰');
+            refreshAllSettingsWindows();
+        };
 
         window.toggleBetaUpdates = function(id) {
             state.system.betaEnabled = !state.system.betaEnabled;
@@ -2290,35 +2447,48 @@
         window.checkSystemUpdates = function(id) {
             const now = new Date();
             state.system.lastChecked = now.toLocaleString('tr-TR');
-            const patch = state.system.betaEnabled ? '23020.10' : '22621.35';
-            const ring = state.system.betaEnabled ? 'Beta' : 'Kararlı';
-            state.system.pendingUpdate = {
-                version: `11.0.${patch}`,
-                ring,
-                note: state.system.betaEnabled
-                    ? 'Yeni pencere animasyonları ve deneysel yapay zeka önerileri.'
-                    : 'Güvenlik düzeltmeleri, sürücü kararlılığı ve performans iyileştirmeleri.'
-            };
+            state.system.pendingUpdate = getNextUpdatePayload();
             refreshAllSettingsWindows();
             window.showToast(`${state.system.pendingUpdate.version} paketi bulundu`, '📥');
         };
 
         window.installSystemUpdate = function(id) {
-            if (!state.system.pendingUpdate) {
+            if (!state.system.pendingUpdate || state.system.updateInProgress) {
                 window.showToast('Kurulacak güncelleme bulunamadı', 'ℹ️');
                 return;
             }
 
-            const update = state.system.pendingUpdate;
-            state.system.version = update.version;
-            state.system.updateHistory.unshift({
-                version: update.version,
-                date: new Date().toLocaleDateString('tr-TR'),
-                note: update.note
-            });
-            state.system.pendingUpdate = null;
+            const update = { ...state.system.pendingUpdate };
+            state.system.updateInProgress = true;
+            state.system.updateProgress = 0;
             refreshAllSettingsWindows();
-            window.showToast(`Sistem ${update.version} sürümüne güncellendi`, '🚀');
+
+            const timer = setInterval(() => {
+                const step = Math.floor(Math.random() * 14) + 8;
+                state.system.updateProgress = Math.min(100, state.system.updateProgress + step);
+                refreshAllSettingsWindows();
+
+                if (state.system.updateProgress >= 100) {
+                    clearInterval(timer);
+                    state.system.version = update.version;
+                    state.system.updateHistory.unshift({
+                        version: update.version,
+                        date: new Date().toLocaleDateString('tr-TR'),
+                        note: update.note
+                    });
+                    state.system.pendingUpdate = null;
+                    state.system.updateInProgress = false;
+                    state.system.rebootRequired = true;
+
+                    if (update.ring === 'Beta') {
+                        state.system.storeUnlocked = true;
+                        refreshWindowsByType('store');
+                    }
+
+                    refreshAllSettingsWindows();
+                    window.showToast(`Sistem ${update.version} sürümüne güncellendi`, '🚀');
+                }
+            }, 240);
         };
 
         function createWindowContent(id, appData, type) {
@@ -2353,6 +2523,7 @@
         }
 
         function getAppHTML(type, id) {
+            const appData = state.apps[type] || { name: "Uygulama", icon: "🧩" };
             switch(type) {
                 case 'explorer':
                     return `
@@ -2457,6 +2628,44 @@
                 case 'settings':
                     return createSettingsContent(id);
                 
+
+                case 'store': {
+                    if (!state.system.storeUnlocked) {
+                        return `
+                            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; padding:24px;">
+                                <div style="font-size:58px; margin-bottom:12px;">🔒</div>
+                                <h2 style="margin-bottom:10px; color:#2d3748;">Mexa Store henüz kilitli</h2>
+                                <p style="max-width:520px; color:#64748b; line-height:1.5;">Mağazayı tamamen etkinleştirmek için Ayarlar &gt; Güncelleme bölümünden beta güncellemelerini açıp en son beta paketini kurun.</p>
+                                <button class="settings-btn primary" style="margin-top:16px;" onclick="window.openApp('settings')">Ayarları aç</button>
+                            </div>
+                        `;
+                    }
+
+                    return `
+                        <div style="height:100%; display:flex; flex-direction:column; background:#f8fafc;">
+                            <div style="padding:14px 16px; border-bottom:1px solid #e2e8f0; background:#fff; display:flex; justify-content:space-between; align-items:center;">
+                                <strong>🛍️ Mexa Store</strong>
+                                <span class="settings-pill">Beta servis aktif</span>
+                            </div>
+                            <div style="padding:16px; display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; overflow:auto;">
+                                ${[
+                                    { icon: '🎵', name: 'Mexa Music', desc: 'Ses kalitesi güncellemesi' },
+                                    { icon: '🎮', name: 'Arcade Hub', desc: 'Bulut oyun istemcisi' },
+                                    { icon: '🧠', name: 'AI Notes', desc: 'Akıllı not özetleme' },
+                                    { icon: '🗺️', name: 'Travel Map', desc: 'Çevrimdışı haritalar' }
+                                ].map(app => `
+                                    <div style="border:1px solid #e2e8f0; border-radius:12px; padding:12px; background:#fff;">
+                                        <div style="font-size:30px; margin-bottom:8px;">${app.icon}</div>
+                                        <div style="font-weight:600; color:#1e293b; margin-bottom:4px;">${app.name}</div>
+                                        <div style="font-size:12px; color:#64748b; margin-bottom:10px;">${app.desc}</div>
+                                        <button class="settings-btn" onclick="window.showToast('${app.name} kurulumu başlatıldı', '📦')">Yükle</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
                 case 'notepad':
                     return `
                         <div style="height: 100%; display: flex; flex-direction: column;">
@@ -2550,7 +2759,7 @@
             
             switch(command) {
                 case 'help':
-                    response = 'Kullanılabilir komutlar: help, cls, dir, ls, echo, date, time, ver, calc, whoami, apps, settings, neofetch, update, betaon, betaoff, exit';
+                    response = 'Kullanılabilir komutlar: help, cls, dir, ls, echo, date, time, ver, calc, whoami, apps, settings, neofetch, update, installupdate, betaon, betaoff, syshealth, storestatus, exit';
                     break;
                 case 'cls':
                 case 'clear':
@@ -2592,18 +2801,21 @@
                     break;
                 case 'update': {
                     state.system.lastChecked = new Date().toLocaleString('tr-TR');
-                    const patch = state.system.betaEnabled ? '23020.10' : '22621.35';
-                    state.system.pendingUpdate = {
-                        version: `11.0.${patch}`,
-                        ring: state.system.betaEnabled ? 'Beta' : 'Kararlı',
-                        note: state.system.betaEnabled
-                            ? 'Terminal üzerinden bulunan beta paket.'
-                            : 'Terminal üzerinden bulunan kararlı paket.'
-                    };
+                    state.system.pendingUpdate = getNextUpdatePayload();
                     response = `Güncelleme bulundu: ${state.system.pendingUpdate.version} (${state.system.pendingUpdate.ring})`;
                     refreshAllSettingsWindows();
                     break;
                 }
+                case 'installupdate':
+                    if (!state.system.pendingUpdate) {
+                        response = 'Önce update komutu ile bir paket bulun.';
+                    } else if (state.system.updateInProgress) {
+                        response = 'Kurulum zaten devam ediyor.';
+                    } else {
+                        window.installSystemUpdate(id);
+                        response = `Kurulum başlatıldı: ${state.system.pendingUpdate.version}`;
+                    }
+                    break;
                 case 'betaon':
                     state.system.betaEnabled = true;
                     state.system.channel = 'Beta';
@@ -2616,6 +2828,17 @@
                     response = 'Kararlı güncelleme kanalına geçildi.';
                     refreshAllSettingsWindows();
                     break;
+                case 'storestatus':
+                    response = state.system.storeUnlocked
+                        ? 'Mexa Store aktif ve kullanılabilir.'
+                        : 'Mexa Store kilitli. Beta güncellemesi yükleyin.';
+                    break;
+                case 'syshealth':
+                    response = `Sistem sağlık puanı: ${state.system.healthScore}/100
+Otomatik denetim: ${state.system.autoCheck ? 'Açık' : 'Kapalı'}
+Gece kurulumu: ${state.system.autoInstallAtNight ? 'Açık' : 'Kapalı'}`;
+                    break;
+
                 case 'exit':
                     window.closeWindow(id);
                     return;
