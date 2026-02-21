@@ -1301,6 +1301,83 @@
             transform: translateX(20px);
         }
 
+        .settings-banner {
+            border: 1px solid #d7eaff;
+            background: linear-gradient(135deg, #f2f8ff, #ffffff);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .settings-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #e8f3ff;
+            color: #005a9e;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .settings-card {
+            border: 1px solid #ececec;
+            border-radius: 10px;
+            padding: 14px;
+            background: #fff;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+        }
+
+        .settings-card h4 {
+            font-size: 14px;
+            margin-bottom: 6px;
+            color: #222;
+        }
+
+        .settings-card p {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .settings-btn {
+            border: 1px solid #cfd8e3;
+            background: #f8fbff;
+            color: #1f4d7a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .settings-btn.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        .settings-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
         /* Mobile Optimizations */
         @media (max-width: 768px) {
             .desktop-grid {
@@ -1822,6 +1899,16 @@
             ],
             currentWallpaper: 0,
             calcState: {},
+            system: {
+                version: '11.0.22621.1',
+                channel: 'Kararlı',
+                betaEnabled: false,
+                lastChecked: null,
+                pendingUpdate: null,
+                updateHistory: [
+                    { version: '11.0.22621.1', date: '07.02.2026', note: 'Kararlılık geliştirmeleri ve görev çubuğu performans iyileştirmeleri.' }
+                ]
+            },
             apps: {
                 explorer: { name: 'Dosya Gezgini', icon: '📁', color: '#ffd700' },
                 edge: { name: 'Mexa Browser', icon: '🌐', color: '#0078d4' },
@@ -2105,6 +2192,135 @@
             window.showToast(`${appData.name} açıldı`, appData.icon);
         };
 
+        function createSettingsContent(id) {
+            const update = state.system.pendingUpdate;
+            const channelText = state.system.betaEnabled ? 'Beta Kanalı' : 'Kararlı Kanal';
+            const lastChecked = state.system.lastChecked || 'Henüz kontrol edilmedi';
+            const updateStatus = update
+                ? `Yeni sürüm hazır: ${update.version} (${update.ring})`
+                : 'Cihazınız güncel görünüyor';
+
+            return `
+                <div class="settings-container" data-settings-id="${id}">
+                    <div class="settings-sidebar">
+                        <div class="settings-search">🔍 Ayarlarda arayın</div>
+                        ${['Sistem', 'Cihazlar', 'Ağ', 'Kişiselleştirme', 'Uygulamalar', 'Hesaplar', 'Zaman', 'Oyun', 'Erişilebilirlik', 'Gizlilik', 'Güncelleme'].map((cat, i) => `
+                            <div class="settings-category ${cat === 'Güncelleme' ? 'active' : ''}" onclick="window.showToast('${cat} ayarları', '⚙️')">
+                                <span>${['⚙️', '🔵', '📶', '🎨', '📦', '👤', '🕐', '🎮', '♿', '🔒', '🔄'][i]}</span>
+                                ${cat}
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="settings-content">
+                        <div class="settings-header">Windows Update benzeri merkez</div>
+                        <div class="settings-banner">
+                            <div>
+                                <div class="settings-pill">📦 Sürüm ${state.system.version}</div>
+                                <div style="font-size: 18px; font-weight: 600; margin-top: 8px; color: #1f2a37;">Sistem durumu: ${updateStatus}</div>
+                                <div style="font-size: 13px; color: #596579; margin-top: 6px;">Son denetim: ${lastChecked}</div>
+                            </div>
+                            <button class="settings-btn primary" onclick="window.checkSystemUpdates('${id}')">Güncellemeleri denetle</button>
+                        </div>
+
+                        <div class="settings-grid">
+                            <div class="settings-card">
+                                <h4>Güncelleme kanalı</h4>
+                                <p>Kararlı kanal ile beta kanal arasında geçiş yaparak yeni özellikleri daha erken test edebilirsiniz.</p>
+                                <div class="settings-row">
+                                    <span class="settings-pill" id="update-channel-${id}">${channelText}</span>
+                                    <button class="settings-btn" onclick="window.toggleBetaUpdates('${id}')">Beta güncellemeleri ${state.system.betaEnabled ? 'kapat' : 'aç'}</button>
+                                </div>
+                            </div>
+                            <div class="settings-card">
+                                <h4>İndirme optimizasyonu</h4>
+                                <p>Arka planda paketleri düşük öncelikle indirir, pildeyken geciktirir.</p>
+                                <div class="toggle active" onclick="this.classList.toggle('active');window.showToast('İndirme optimizasyonu güncellendi', '⚡')"></div>
+                            </div>
+                            <div class="settings-card">
+                                <h4>Aktif saatler</h4>
+                                <p>Çalışma saatlerinde yeniden başlatma önerisi göstermez.</p>
+                                <select style="padding: 8px; border-radius: 8px; border: 1px solid #ddd; width: 100%;">
+                                    <option>09:00 - 18:00</option>
+                                    <option>08:00 - 17:00</option>
+                                    <option>10:00 - 19:00</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-label">Hazır bekleyen paket</div>
+                            <div class="setting-desc" id="pending-update-${id}">${update ? `${update.version} (${update.ring}) indirildi ve kurulmaya hazır.` : 'Kurulacak bir paket bulunamadı.'}</div>
+                            <button class="settings-btn" onclick="window.installSystemUpdate('${id}')" ${update ? '' : 'disabled'} id="install-update-${id}">Şimdi yükle</button>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-label">Son güncelleme geçmişi</div>
+                            <div id="update-history-${id}">
+                                ${state.system.updateHistory.slice(0, 3).map(item => `<div style="font-size: 13px; color: #4a5568; margin-bottom: 6px;">✅ ${item.date} · ${item.version} — ${item.note}</div>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function refreshSettingsWindow(id) {
+            const win = state.windows.find(w => w.id === id);
+            if (!win || win.appType !== 'settings') return;
+            const content = win.element.querySelector('.window-content');
+            if (content) content.innerHTML = createSettingsContent(id);
+        }
+
+        function refreshAllSettingsWindows() {
+            state.windows
+                .filter(win => win.appType === 'settings')
+                .forEach(win => refreshSettingsWindow(win.id));
+        }
+
+        window.toggleBetaUpdates = function(id) {
+            state.system.betaEnabled = !state.system.betaEnabled;
+            state.system.channel = state.system.betaEnabled ? 'Beta' : 'Kararlı';
+            refreshAllSettingsWindows();
+            window.showToast(
+                state.system.betaEnabled ? 'Beta güncellemeleri etkinleştirildi' : 'Kararlı güncelleme kanalına dönüldü',
+                state.system.betaEnabled ? '🧪' : '🛡️'
+            );
+        };
+
+        window.checkSystemUpdates = function(id) {
+            const now = new Date();
+            state.system.lastChecked = now.toLocaleString('tr-TR');
+            const patch = state.system.betaEnabled ? '23020.10' : '22621.35';
+            const ring = state.system.betaEnabled ? 'Beta' : 'Kararlı';
+            state.system.pendingUpdate = {
+                version: `11.0.${patch}`,
+                ring,
+                note: state.system.betaEnabled
+                    ? 'Yeni pencere animasyonları ve deneysel yapay zeka önerileri.'
+                    : 'Güvenlik düzeltmeleri, sürücü kararlılığı ve performans iyileştirmeleri.'
+            };
+            refreshAllSettingsWindows();
+            window.showToast(`${state.system.pendingUpdate.version} paketi bulundu`, '📥');
+        };
+
+        window.installSystemUpdate = function(id) {
+            if (!state.system.pendingUpdate) {
+                window.showToast('Kurulacak güncelleme bulunamadı', 'ℹ️');
+                return;
+            }
+
+            const update = state.system.pendingUpdate;
+            state.system.version = update.version;
+            state.system.updateHistory.unshift({
+                version: update.version,
+                date: new Date().toLocaleDateString('tr-TR'),
+                note: update.note
+            });
+            state.system.pendingUpdate = null;
+            refreshAllSettingsWindows();
+            window.showToast(`Sistem ${update.version} sürümüne güncellendi`, '🚀');
+        };
+
         function createWindowContent(id, appData, type) {
             const resizeHandles = !state.isTouch ? `
                 <div class="resize-handle resize-n" data-resize="n"></div>
@@ -2239,41 +2455,7 @@
                     `;
                 
                 case 'settings':
-                    return `
-                        <div class="settings-container">
-                            <div class="settings-sidebar">
-                                <div class="settings-search">🔍 Ayarlarda arayın</div>
-                                ${['Sistem', 'Cihazlar', 'Ağ', 'Kişiselleştirme', 'Uygulamalar', 'Hesaplar', 'Zaman', 'Oyun', 'Erişilebilirlik', 'Gizlilik', 'Güncelleme'].map((cat, i) => `
-                                    <div class="settings-category ${i === 0 ? 'active' : ''}" onclick="window.showToast('${cat} ayarları', '⚙️')">
-                                        <span>${['⚙️', '🔵', '📶', '🎨', '📦', '👤', '🕐', '🎮', '♿', '🔒', '🔄'][i]}</span>
-                                        ${cat}
-                                    </div>
-                                `).join('')}
-                            </div>
-                            <div class="settings-content">
-                                <div class="settings-header">Ekran</div>
-                                <div class="setting-item">
-                                    <div class="setting-label">Gece ışığı</div>
-                                    <div class="setting-desc">Akşamları daha sıcak renkler gösterir</div>
-                                    <div class="toggle" onclick="this.classList.toggle('active')"></div>
-                                </div>
-                                <div class="setting-item">
-                                    <div class="setting-label">HDR</div>
-                                    <div class="setting-desc">HDR içeriğini optimize edin</div>
-                                    <div class="toggle active" onclick="this.classList.toggle('active')"></div>
-                                </div>
-                                <div class="setting-item">
-                                    <div class="setting-label">Ölçek</div>
-                                    <div class="setting-desc">Metin, uygulama ve diğer öğelerin boyutunu değiştirin</div>
-                                    <select style="margin-top: 8px; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
-                                        <option>%100 (Önerilen)</option>
-                                        <option>%125</option>
-                                        <option>%150</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    `;
+                    return createSettingsContent(id);
                 
                 case 'notepad':
                     return `
@@ -2368,7 +2550,7 @@
             
             switch(command) {
                 case 'help':
-                    response = 'Kullanılabilir komutlar: help, cls, dir, ls, echo, date, time, ver, calc, whoami, exit';
+                    response = 'Kullanılabilir komutlar: help, cls, dir, ls, echo, date, time, ver, calc, whoami, apps, settings, neofetch, update, betaon, betaoff, exit';
                     break;
                 case 'cls':
                 case 'clear':
@@ -2389,7 +2571,7 @@
                     break;
                 case 'ver':
                 case 'version':
-                    response = 'Mexa OS [Sürüm 11.0.22621.1]\nMexa Systems\n(C) Mexa Systems. Tüm hakları saklıdır.';
+                    response = `Mexa OS [Sürüm ${state.system.version}]\nMexa Systems\n(C) Mexa Systems. Tüm hakları saklıdır.`;
                     break;
                 case 'whoami':
                     response = 'user';
@@ -2397,6 +2579,42 @@
                 case 'calc':
                     window.openApp('calculator');
                     response = 'Hesap makinesi açıldı.';
+                    break;
+                case 'apps':
+                    response = Object.values(state.apps).map(app => `${app.icon} ${app.name}`).join('\n');
+                    break;
+                case 'settings':
+                    window.openApp('settings');
+                    response = 'Ayarlar açıldı.';
+                    break;
+                case 'neofetch':
+                    response = `Mexa OS\nSürüm: ${state.system.version}\nKanal: ${state.system.channel}\nKullanıcı: user`; 
+                    break;
+                case 'update': {
+                    state.system.lastChecked = new Date().toLocaleString('tr-TR');
+                    const patch = state.system.betaEnabled ? '23020.10' : '22621.35';
+                    state.system.pendingUpdate = {
+                        version: `11.0.${patch}`,
+                        ring: state.system.betaEnabled ? 'Beta' : 'Kararlı',
+                        note: state.system.betaEnabled
+                            ? 'Terminal üzerinden bulunan beta paket.'
+                            : 'Terminal üzerinden bulunan kararlı paket.'
+                    };
+                    response = `Güncelleme bulundu: ${state.system.pendingUpdate.version} (${state.system.pendingUpdate.ring})`;
+                    refreshAllSettingsWindows();
+                    break;
+                }
+                case 'betaon':
+                    state.system.betaEnabled = true;
+                    state.system.channel = 'Beta';
+                    response = 'Beta güncelleme kanalı etkinleştirildi.';
+                    refreshAllSettingsWindows();
+                    break;
+                case 'betaoff':
+                    state.system.betaEnabled = false;
+                    state.system.channel = 'Kararlı';
+                    response = 'Kararlı güncelleme kanalına geçildi.';
+                    refreshAllSettingsWindows();
                     break;
                 case 'exit':
                     window.closeWindow(id);
