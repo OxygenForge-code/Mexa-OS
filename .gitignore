@@ -1,0 +1,14 @@
+# Build outputs
+build/
+out/
+*.o
+*.bin
+*.iso
+*.img
+
+# IDE
+.vscode/
+.idea/
+
+# OSDev
+qemu.log
